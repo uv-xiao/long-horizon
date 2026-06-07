@@ -40,6 +40,7 @@ This file tracks commit/PR-sized changes while the template evolves. It is not a
 - Refined reporter authority: source-backed timelines stay canonical, while configured reporter-authored timeline analysis may be written for human review.
 - Added a detailed v1 runtime implementation specification for `/goal`, covering install layout, CLI surface, data contracts, logging, process recovery, reporter playback, comments, tests, and acceptance criteria.
 - Moved the v1 testing and acceptance bar to the top of the implementation specification, emphasizing focused unit tests and hard system tests over shallow helper coverage.
+- Implemented the first Python v1 runtime with installer, config validation, goal/run creation, typed and loose logging, transition validation, process interruption/resume, observer interventions, human report generation, pushed comment import, and focused unit/system tests.
 - Added initial installable configuration catalog and policy-update skill templates.
 - Narrowed the runtime `.long-horizon/` ignore rule so tracked template fixtures under `templates/` can include `.long-horizon/` content.
 - Resolved v1 reporting views: one static HTML report embeds SVG workflow projection generated from flow snapshot, boards, and transition history.
