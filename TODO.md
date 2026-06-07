@@ -1,3 +1,4 @@
 # TODO
 
-- Add an adapter learner for long-horizon runs. When the system lacks a sufficient adapter, such as a remote execution adapter, the run should be able to learn the missing procedure during execution, validate it, and deposit it as a reusable skill or adapter note through the knowledge deposition mechanism.
+- Define post-run adapter promotion. Runs may learn and immediately use missing adapters while logging them under run artifacts; a later mechanism should promote stable learned adapters into reusable memory or skills after review.
+- Add an artifact retention and eviction mechanism. Evidence artifacts should be append-only for auditability, but the system needs a policy for pruning, archiving, compressing, or externalizing large raw artifacts while preserving lineage and completion-audit trust.
