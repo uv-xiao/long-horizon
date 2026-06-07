@@ -39,6 +39,7 @@ This file tracks commit/PR-sized changes while the template evolves. It is not a
 - Corrected observer workspace and brief model: observers usually attach to a task/parent workspace while observing granted targets, and `agent-brief.md` remains one process-filtered schema.
 - Refined reporter authority: source-backed timelines stay canonical, while configured reporter-authored timeline analysis may be written for human review.
 - Added a detailed v1 runtime implementation specification for `/goal`, covering install layout, CLI surface, data contracts, logging, process recovery, reporter playback, comments, tests, and acceptance criteria.
+- Moved the v1 testing and acceptance bar to the top of the implementation specification, emphasizing focused unit tests and hard system tests over shallow helper coverage.
 - Added initial installable configuration catalog and policy-update skill templates.
 - Narrowed the runtime `.long-horizon/` ignore rule so tracked template fixtures under `templates/` can include `.long-horizon/` content.
 - Resolved v1 reporting views: one static HTML report embeds SVG workflow projection generated from flow snapshot, boards, and transition history.

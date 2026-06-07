@@ -18,6 +18,78 @@ Codex `/goal`, another agent, or a human is an executor attached to a durable
 long-horizon process. The long-horizon runtime owns state, validation, logging,
 process metadata, reporting, and human interaction routing.
 
+## Testing And Acceptance Bar
+
+Testing is part of the design, not a cleanup step. V1 must prove the template
+works as a long-horizon substrate under realistic stress, not merely that helper
+functions return expected values.
+
+Do not create many shallow tests for unimportant helpers. Use tests where they
+increase confidence in mechanisms that can break long-horizon execution:
+installation, configuration, logging integrity, workflow validation, process
+recovery, observer intervention, human comments, and report projection.
+
+Use two test classes:
+
+- `ut`: focused unit tests for core mechanism boundaries and validators.
+- `st`: hard system tests that exercise the installed template across multiple
+  mechanisms in one target repository.
+
+Required unit tests:
+
+- config validation rejects invalid policy values;
+- logger appends typed events with per-ledger sequence ids and rejects malformed
+  canonical events;
+- loose logs cannot directly drive transitions;
+- transition validation applies allowed transitions and blocks missing artifact,
+  human gate, or wait requirements;
+- process interruption/resume updates status and regenerates a targeted agent
+  brief;
+- observer intervention writes append-only observer events and does not mutate
+  task boards;
+- comment import deduplicates pushed envelopes and writes typed human events.
+
+Required system tests:
+
+1. **Install-and-run happy path**
+   - create a temporary target repo;
+   - install `.agents/` and `.long-horizon/`;
+   - create a goal/run;
+   - log typed and loose events;
+   - satisfy an artifact gate;
+   - apply transitions to completion;
+   - generate `progress.html`, `progress.md`, and `report-data.json`;
+   - assert report data contains stable ids, event sequence, process/workflow
+     state, anchors, and human-readable report surfaces.
+2. **Hard recovery case**
+   - create a run with an active process;
+   - mark agent session lost/interrupted;
+   - regenerate a process-targeted brief;
+   - attach a replacement session;
+   - continue transition after resume;
+   - assert old/new session refs, process events, status changes, and brief
+     recovery context are correct.
+3. **Parent-child/observer/comment case**
+   - represent or spawn child process state;
+   - record observer finding/intervention against the child or primary process;
+   - import a pushed human comment targeting a stable report anchor;
+   - route/comment-log it as a typed human event;
+   - generate report;
+   - assert graph/report data contains parent-child relation, communication or
+     intervention edge, comment event, and no observer mutation of task board.
+
+Acceptance bar:
+
+- The system tests are the real acceptance criteria. A minimal implementation is
+  not acceptable unless these tests demonstrate the template works across
+  install, workflow, logging, process recovery, observer intervention, reporting,
+  and comment import.
+- If an implementation problem appears, exploit practical alternatives to make
+  the end-to-end mechanism work instead of stopping at scaffolding. Record
+  intentionally deferred gaps in `TODO.md`.
+- The final verification must report test commands, results, deferred gaps, and
+  the commit pushed.
+
 ## Source Files
 
 Implementation must align with these public files:
@@ -897,27 +969,11 @@ Implement in this order:
 
 ## Test Requirements
 
-Tests should use temporary directories and `python -m long_horizon` or direct
-module APIs.
-
-Required tests:
-
-- installer dry-run writes install plan without mutating target agent files;
-- installer apply creates `.agents/` and `.long-horizon/`;
-- config validates defaults and rejects invalid policy values;
-- goal/run creation creates expected directories and initial events;
-- logger appends sequential typed events and rejects malformed typed payloads;
-- logger supports loose capture and promotion refs;
-- transition applies allowed transition and blocks missing artifact gate;
-- process interrupt/resume updates process status and regenerates brief;
-- observer intervention writes append-only observer event and does not mutate
-  task board;
-- report generation writes `progress.html`, `progress.md`, and
-  `report-data.json` with stable ids/anchors;
-- comment import deduplicates pushed envelopes and writes human events.
-
-Verification commands should be documented in final response and, if useful, in
-README usage docs.
+Follow the top-level testing and acceptance bar in this document. Tests should
+use temporary directories and `python -m long_horizon` or direct module APIs.
+Unit tests should stay focused on important mechanism boundaries. System tests
+must validate the template as an installed, end-to-end runtime under realistic
+long-horizon cases.
 
 ## Acceptance Criteria
 
