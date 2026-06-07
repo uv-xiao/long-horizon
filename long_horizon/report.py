@@ -32,9 +32,13 @@ def build_report_data(root: str | Path, goal_id: str, run_id: str) -> dict[str, 
         "run_id": run_id,
         "current_state": board.get("current_state"),
         "allowed_next": board.get("allowed_next", allowed_next(flow, board.get("current_state", ""))),
+        "playback": {"axis": "event_sequence", "count": len(events), "current_index": max(0, len(events) - 1)},
         "processes": processes,
         "events": events,
+        "event_lanes": _event_lanes(events),
         "communication_edges": edges,
+        "human_comments": _human_comments(events),
+        "observer_interventions": _observer_interventions(events),
         "snapshots": snapshots,
         "anchors": _anchors(events, processes, edges),
     }
@@ -149,6 +153,7 @@ const graph = document.getElementById('graph');
 const lanes = document.getElementById('lanes');
 const inspector = document.getElementById('inspector');
 function draw(idx) {{
+  const snapshot = data.snapshots[idx] || data.snapshots[data.snapshots.length - 1] || {{}};
   const events = data.events.slice(0, idx + 1);
   const nodes = data.processes;
   const width = 760, height = Math.max(280, nodes.length * 90 + 80);
@@ -222,6 +227,12 @@ def _communication_edges(events: list[dict[str, Any]], processes: list[dict[str,
     for event in events:
         payload = event.get("payload", {})
         target = payload.get("target_process_id")
+        if event.get("event_type") == "artifact_imported" and payload.get("from_process_id") in process_ids and target in process_ids:
+            edges.append({"kind": "artifact_import", "from": payload["from_process_id"], "to": target, "event_id": event["event_id"]})
+            continue
+        if event.get("event_type") in {"review_verdict", "plan_critique"} and target in process_ids:
+            edges.append({"kind": "review_result", "from": event["process_id"], "to": target, "event_id": event["event_id"]})
+            continue
         if target in process_ids and event.get("process_id") in process_ids:
             kind = "steer" if event["event_type"].startswith("intervention") else "message"
             edges.append({"kind": kind, "from": event["process_id"], "to": target, "event_id": event["event_id"]})
@@ -229,7 +240,24 @@ def _communication_edges(events: list[dict[str, Any]], processes: list[dict[str,
 
 
 def _snapshot_at(events: list[dict[str, Any]], processes: list[dict[str, Any]], board: dict[str, Any], idx: int) -> dict[str, Any]:
-    return {"event_index": idx, "current_state": board.get("current_state"), "processes": processes, "visible_event_ids": [e["event_id"] for e in events]}
+    process_status = {proc["process_id"]: dict(proc) for proc in processes}
+    current_state = board.get("current_state")
+    for event in events:
+        payload = event.get("payload", {})
+        if event.get("event_type") == "transition_applied":
+            current_state = payload.get("to", current_state)
+        if event.get("event_type") in {"process_interrupted", "agent_session_lost"} and event.get("process_id") in process_status:
+            process_status[event["process_id"]]["status"] = "interrupted"
+        if event.get("event_type") == "agent_session_attached" and event.get("process_id") in process_status:
+            process_status[event["process_id"]]["status"] = "active"
+        if event.get("event_type") == "process_completed" and event.get("process_id") in process_status:
+            process_status[event["process_id"]]["status"] = "completed"
+    return {
+        "event_index": idx,
+        "current_state": current_state,
+        "processes": list(process_status.values()),
+        "visible_event_ids": [e["event_id"] for e in events],
+    }
 
 
 def _anchors(events: list[dict[str, Any]], processes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> list[str]:
@@ -244,3 +272,60 @@ def _brief_observer_messages(events: list[dict[str, Any]]) -> str:
     if not events:
         return "(none)"
     return "\n".join(f"- `{e['event_id']}` {e['event_type']}: {e.get('payload', {}).get('message', '')}" for e in events)
+
+
+def _event_lanes(events: list[dict[str, Any]]) -> dict[str, list[str]]:
+    lanes = {"transition": [], "process": [], "command": [], "artifact": [], "review": [], "human": [], "observer": [], "notification": [], "reporter": []}
+    mapping = {
+        "transitions": "transition",
+        "process-events": "process",
+        "commands": "command",
+        "artifacts": "artifact",
+        "reviews": "review",
+        "human": "human",
+        "observer-events": "observer",
+        "notifications": "notification",
+        "reporter-annotations": "reporter",
+    }
+    for event in events:
+        lane = mapping.get(event.get("ledger"))
+        if lane:
+            lanes[lane].append(event["event_id"])
+    return lanes
+
+
+def _human_comments(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    comments = []
+    for event in events:
+        if event.get("event_type") == "human_comment":
+            payload = event.get("payload", {})
+            comments.append(
+                {
+                    "event_id": event["event_id"],
+                    "author": payload.get("author", ""),
+                    "classification": payload.get("classification", ""),
+                    "target_refs": payload.get("target_refs", []),
+                    "body": payload.get("body", ""),
+                    "anchor": f"#event-{event['event_id']}",
+                }
+            )
+    return comments
+
+
+def _observer_interventions(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    interventions = []
+    for event in events:
+        if event.get("event_type") in {"intervention_requested", "intervention_delivered", "intervention_acknowledged"}:
+            payload = event.get("payload", {})
+            interventions.append(
+                {
+                    "event_id": event["event_id"],
+                    "observer_process_id": event.get("process_id"),
+                    "target_process_id": payload.get("target_process_id", ""),
+                    "message": payload.get("message", ""),
+                    "delivery_channel": payload.get("delivery_channel", ""),
+                    "delivery_result": payload.get("delivery_result", ""),
+                    "anchor": f"#event-{event['event_id']}",
+                }
+            )
+    return interventions
