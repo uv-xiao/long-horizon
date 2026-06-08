@@ -237,8 +237,6 @@ Do not modify any other tracked files. Do not commit.
     cmd = [
         "codex",
         "exec",
-        "--ask-for-approval",
-        "never",
         "--sandbox",
         "workspace-write",
         "-C",
