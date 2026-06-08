@@ -98,7 +98,9 @@ def run_demo(demo_root: Path, use_codex: bool) -> None:
 
     install(parent, apply=True)
     commit_if_dirty(parent, "demo: install long-horizon runtime")
-    create_goal(parent, GOAL_ID, _contract_text())
+    contract_file = artifacts / "calculator-contract.md"
+    contract_file.write_text(_contract_text(), encoding="utf-8")
+    create_goal(parent, GOAL_ID, contract_file)
     create_run(parent, GOAL_ID, RUN_ID)
     flow = _calculator_flow()
     write_toml(run_dir(parent, GOAL_ID, RUN_ID) / "flow.snapshot.toml", flow)
