@@ -45,6 +45,7 @@ This file tracks commit/PR-sized changes while the template evolves. It is not a
 - Added the v1 local report server, timeline slide artifacts, real git worktree child spawning with copied `.long-horizon/` state, parent-side child artifact import and branch merge, GitHub adapter local-auth smoke coverage, and an updated feature-by-feature coverage guide.
 - Added a detailed v1 implementation and verification guide that maps each design mechanism to implementation files, test design, inspected artifacts, and the reason the evidence proves the mechanism.
 - Added workflow merge strategy documentation, parent-side process merge artifacts, and a persistent calculator demo that uses child worktrees, optional Codex candidate generation, shortest-passing selection, branch merge, and durable reports for human inspection.
+- Fixed reporter rendering so `progress.html` and `slides.html` contain meaningful server-rendered process/event content, embed valid JSON for playback, and reconstruct timeline snapshots from the workflow initial state.
 - Added initial installable configuration catalog and policy-update skill templates.
 - Narrowed the runtime `.long-horizon/` ignore rule so tracked template fixtures under `templates/` can include `.long-horizon/` content.
 - Resolved v1 reporting views: one static HTML report embeds SVG workflow projection generated from flow snapshot, boards, and transition history.

@@ -51,7 +51,10 @@ class ReportServerGitGithubSystemTests(unittest.TestCase):
         slides = read_json(reports / "slides-data.json")
         self.assertEqual(len(slides["slides"]), len(data["events"]))
         slides_html = (reports / "slides.html").read_text(encoding="utf-8")
-        self.assertIn("data-slide-index", slides_html)
+        self.assertIn('<article id="current-slide"', slides_html)
+        self.assertIn("<svg", slides_html)
+        self.assertIn("child-a", slides_html)
+        self.assertIn('<script id="slides-data" type="application/json">{"goal_id"', slides_html)
         self.assertIn("timeline", slides_html)
         self.assertIn("process-map", slides_html)
 
@@ -59,6 +62,10 @@ class ReportServerGitGithubSystemTests(unittest.TestCase):
             base = server.url
             html = request.urlopen(f"{base}/progress.html", timeout=5).read().decode("utf-8")
             self.assertIn("Event sequence", html)
+            self.assertIn("<svg", html)
+            self.assertIn("child-a", html)
+            self.assertIn("check_result", html)
+            self.assertIn('<script id="report-data" type="application/json">{"goal_id"', html)
             body = json.dumps(
                 {
                     "channel": "github",

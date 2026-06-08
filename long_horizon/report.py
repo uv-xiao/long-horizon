@@ -29,7 +29,8 @@ def build_report_data(root: str | Path, goal_id: str, run_id: str) -> dict[str, 
     processes = [_process_node(path, board) for path in sorted(processes_dir(root, goal_id, run_id).glob("*.toml"))]
     events = _unified_events(rdir)
     edges = _communication_edges(events, processes)
-    snapshots = [_snapshot_at(events[: idx + 1], processes, board, idx) for idx in range(len(events))]
+    initial_state = flow.get("flow", {}).get("initial_state", board.get("current_state"))
+    snapshots = [_snapshot_at(events[: idx + 1], processes, initial_state, idx) for idx in range(len(events))]
     data = {
         "goal_id": goal_id,
         "run_id": run_id,
@@ -116,8 +117,122 @@ def render_markdown(data: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _process_map_svg(processes: list[dict[str, Any]], edges: list[dict[str, Any]], visible_event_ids: list[str]) -> str:
+    nodes = [dict(proc) for proc in processes]
+    by_id: dict[str, dict[str, Any]] = {}
+    height = max(280, len(nodes) * 90 + 80)
+    svg = [
+        f'<svg viewBox="0 0 760 {height}" role="img" aria-label="process map">',
+        '<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#8b6f47"/></marker></defs>',
+    ]
+    for idx, node in enumerate(nodes):
+        x = 40 + (idx % 3) * 230
+        y = 40 + (idx // 3) * 110
+        node["_x"] = x
+        node["_y"] = y
+        by_id[str(node.get("process_id"))] = node
+        process_id = html.escape(str(node.get("process_id", "")))
+        role = html.escape(str(node.get("role", "")))
+        status = html.escape(str(node.get("status", "")))
+        state = html.escape(str(node.get("workflow_state", "")))
+        svg.append(
+            f'<g id="process-{process_id}"><rect class="node" x="{x}" y="{y}" width="190" height="70" rx="6"></rect>'
+            f'<text x="{x + 10}" y="{y + 22}">{process_id} ({role})</text>'
+            f'<text x="{x + 10}" y="{y + 44}">status: {status}</text>'
+            f'<text x="{x + 10}" y="{y + 62}">state: {state}</text></g>'
+        )
+    visible = set(visible_event_ids)
+    for edge in edges:
+        if edge.get("event_id") not in visible and edge.get("kind") != "spawn":
+            continue
+        from_node = by_id.get(str(edge.get("from")))
+        to_node = by_id.get(str(edge.get("to")))
+        if not from_node or not to_node:
+            continue
+        event_id = html.escape(str(edge.get("event_id", "")))
+        kind = html.escape(str(edge.get("kind", "")))
+        x1 = from_node["_x"] + 190
+        y1 = from_node["_y"] + 35
+        x2 = to_node["_x"]
+        y2 = to_node["_y"] + 35
+        svg.append(
+            f'<g id="edge-{event_id}"><line class="edge" x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}"></line>'
+            f'<circle class="marker" cx="{(x1 + x2) / 2:.1f}" cy="{(y1 + y2) / 2:.1f}" r="4"></circle>'
+            f'<text x="{(x1 + x2) / 2 + 8:.1f}" y="{(y1 + y2) / 2 - 6:.1f}">{kind}</text></g>'
+        )
+    svg.append("</svg>")
+    return "".join(svg)
+
+
+def _event_lanes_html(events: list[dict[str, Any]], current_index: int) -> str:
+    parts = []
+    for idx, event in enumerate(events):
+        event_type = html.escape(str(event.get("event_type", "")))
+        event_id = html.escape(str(event.get("event_id", "")))
+        opacity = ' style="opacity:0.35"' if idx > current_index else ""
+        parts.append(f'<button class="event" id="event-{event_id}"{opacity}>{idx} {event_type}</button>')
+    return "".join(parts)
+
+
+def _human_summary_html(comments: list[dict[str, Any]]) -> str:
+    if not comments:
+        return "<p>(none)</p>"
+    return "<ul>" + "".join(
+        f"<li><strong>{html.escape(str(comment.get('classification', '')))}</strong> "
+        f"{html.escape(str(comment.get('author', '')))}: {html.escape(str(comment.get('body', '')))}</li>"
+        for comment in comments
+    ) + "</ul>"
+
+
+def _observer_summary_html(interventions: list[dict[str, Any]]) -> str:
+    if not interventions:
+        return "<p>(none)</p>"
+    return "<ul>" + "".join(
+        f"<li><strong>{html.escape(str(item.get('observer_process_id', '')))}</strong> -> "
+        f"{html.escape(str(item.get('target_process_id', '')))}: {html.escape(str(item.get('message', '')))}</li>"
+        for item in interventions
+    ) + "</ul>"
+
+
+def _slide_article_html(slide: dict[str, Any], index: int, count: int) -> str:
+    snapshot = slide.get("snapshot", {})
+    process_map = _process_map_svg(snapshot.get("processes", []), slide.get("visible_edges", []), snapshot.get("visible_event_ids", []))
+    human_summary = _human_summary_html(slide.get("human_comments", []))
+    observer_summary = _observer_summary_html(slide.get("observer_interventions", []))
+    timeline = "".join(
+        f'<button class="{"active" if i == index else ""}" onclick="draw({i})">{i}</button>'
+        for i in range(count)
+    )
+    return (
+        f'<article id="current-slide" data-slide-index="{index}">'
+        f"<h2>{html.escape(str(slide.get('title', '')))}</h2>"
+        f"<p>Workflow state: <strong>{html.escape(str(snapshot.get('current_state', '')))}</strong></p>"
+        f'<div class="process-map">{process_map}</div>'
+        f"<h3>Human comments</h3>{human_summary}"
+        f"<h3>Observer interventions</h3>{observer_summary}"
+        f'<div class="timeline">{timeline}</div>'
+        "</article>"
+    )
+
+
+def _json_script_payload(data: dict[str, Any]) -> str:
+    return (
+        json.dumps(data, ensure_ascii=False)
+        .replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+    )
+
+
 def render_html(data: dict[str, Any]) -> str:
-    payload = json.dumps(data, ensure_ascii=False)
+    payload = _json_script_payload(data)
+    last_index = max(0, len(data["events"]) - 1)
+    snapshot = data["snapshots"][last_index] if data["snapshots"] else {"processes": [], "visible_event_ids": [], "current_state": data["current_state"]}
+    static_graph = _process_map_svg(snapshot.get("processes", data["processes"]), data["communication_edges"], snapshot.get("visible_event_ids", []))
+    static_lanes = _event_lanes_html(data["events"], last_index)
+    static_inspector = html.escape(json.dumps(data["events"][last_index] if data["events"] else data, indent=2, ensure_ascii=False))
+    human_summary = _human_summary_html(data.get("human_comments", []))
+    observer_summary = _observer_summary_html(data.get("observer_interventions", []))
     return f"""<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
@@ -140,16 +255,21 @@ pre {{ white-space: pre-wrap; }}
   <section>
     <label>Event sequence <input id="slider" type="range" min="0" max="{max(0, len(data['events']) - 1)}" value="{max(0, len(data['events']) - 1)}"></label>
     <p><a href="slides.html">Open timeline slides</a></p>
-    <div id="graph"></div>
+    <p>Current state: <strong id="current-state">{html.escape(str(data['current_state']))}</strong></p>
+    <div id="graph">{static_graph}</div>
     <h2>Event Lanes</h2>
-    <div id="lanes" class="lane"></div>
+    <div id="lanes" class="lane">{static_lanes}</div>
+    <h2>Human Comments</h2>
+    <div id="human-comments">{human_summary}</div>
+    <h2>Observer Interventions</h2>
+    <div id="observer-interventions">{observer_summary}</div>
   </section>
   <section>
     <h2>Inspector</h2>
-    <pre id="inspector"></pre>
+    <pre id="inspector">{static_inspector}</pre>
   </section>
 </main>
-<script id="report-data" type="application/json">{html.escape(payload)}</script>
+<script id="report-data" type="application/json">{payload}</script>
 <script>
 const data = JSON.parse(document.getElementById('report-data').textContent);
 const slider = document.getElementById('slider');
@@ -175,6 +295,7 @@ function draw(idx) {{
   }});
   svg += `</svg>`;
   graph.innerHTML = svg;
+  document.getElementById('current-state').textContent = snapshot.current_state || data.current_state || '';
   lanes.innerHTML = "";
   data.events.forEach((e, i) => {{
     const div = document.createElement('button');
@@ -228,7 +349,12 @@ def build_slides_data(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def render_slides_html(slides_data: dict[str, Any]) -> str:
-    payload = json.dumps(slides_data, ensure_ascii=False)
+    payload = _json_script_payload(slides_data)
+    slide_count = len(slides_data.get("slides", []))
+    current_index = max(0, slide_count - 1)
+    current_slide = slides_data.get("slides", [])[current_index] if slide_count else {"event": {}, "snapshot": {}, "visible_edges": [], "human_comments": [], "observer_interventions": [], "title": "No events"}
+    static_slide = _slide_article_html(current_slide, current_index, slide_count)
+    static_inspector = html.escape(json.dumps(current_slide, indent=2, ensure_ascii=False))
     return f"""<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
@@ -249,13 +375,13 @@ pre {{ white-space: pre-wrap; font-size: 12px; }}
 </style>
 <header><h1>Timeline Slides</h1><div>Goal {html.escape(slides_data['goal_id'])} / Run {html.escape(slides_data['run_id'])}</div></header>
 <main>
-  <section class="slide" id="slide"></section>
+  <section class="slide" id="slide">{static_slide}</section>
   <aside>
     <h2>Inspector</h2>
-    <pre id="inspector"></pre>
+    <pre id="inspector">{static_inspector}</pre>
   </aside>
 </main>
-<script id="slides-data" type="application/json">{html.escape(payload)}</script>
+<script id="slides-data" type="application/json">{payload}</script>
 <script>
 const data = JSON.parse(document.getElementById('slides-data').textContent);
 const slideEl = document.getElementById('slide');
@@ -281,7 +407,7 @@ function processMap(slide) {{
 function draw(i) {{
   index = i;
   const slide = data.slides[index] || {{event: {{}}, snapshot: {{}}}};
-  slideEl.innerHTML = `<article data-slide-index="${{index}}"><h2>${{slide.title}}</h2><p>Workflow state: <strong>${{slide.snapshot.current_state || ''}}</strong></p><div class="process-map">${{processMap(slide)}}</div><h3>Human comments</h3><p>${{slide.human_comments.length}}</p><h3>Observer interventions</h3><p>${{slide.observer_interventions.length}}</p><div class="timeline">${{timeline()}}</div></article>`;
+  slideEl.innerHTML = `<article id="current-slide" data-slide-index="${{index}}"><h2>${{slide.title}}</h2><p>Workflow state: <strong>${{slide.snapshot.current_state || ''}}</strong></p><div class="process-map">${{processMap(slide)}}</div><h3>Human comments</h3><p>${{slide.human_comments.length}}</p><h3>Observer interventions</h3><p>${{slide.observer_interventions.length}}</p><div class="timeline">${{timeline()}}</div></article>`;
   inspector.textContent = JSON.stringify(slide, null, 2);
   document.querySelectorAll('.timeline button').forEach((button, idx) => button.classList.toggle('active', idx === index));
 }}
@@ -346,9 +472,9 @@ def _communication_edges(events: list[dict[str, Any]], processes: list[dict[str,
     return edges
 
 
-def _snapshot_at(events: list[dict[str, Any]], processes: list[dict[str, Any]], board: dict[str, Any], idx: int) -> dict[str, Any]:
+def _snapshot_at(events: list[dict[str, Any]], processes: list[dict[str, Any]], initial_state: str, idx: int) -> dict[str, Any]:
     process_status = {proc["process_id"]: dict(proc) for proc in processes}
-    current_state = board.get("current_state")
+    current_state = initial_state
     for event in events:
         payload = event.get("payload", {})
         if event.get("event_type") == "transition_applied":
@@ -359,6 +485,8 @@ def _snapshot_at(events: list[dict[str, Any]], processes: list[dict[str, Any]], 
             process_status[event["process_id"]]["status"] = "active"
         if event.get("event_type") == "process_completed" and event.get("process_id") in process_status:
             process_status[event["process_id"]]["status"] = "completed"
+    for proc in process_status.values():
+        proc["workflow_state"] = current_state
     return {
         "event_index": idx,
         "current_state": current_state,

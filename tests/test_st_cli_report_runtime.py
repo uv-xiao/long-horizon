@@ -56,6 +56,12 @@ class CliReportSystemTest(unittest.TestCase):
             html = (run / "reports" / "progress.html").read_text(encoding="utf-8")
             self.assertIn("Event sequence", html)
             self.assertIn("data.snapshots", html)
+            self.assertIn("<svg", html)
+            self.assertIn("transition_applied", html)
+            self.assertIn('<script id="report-data" type="application/json">{"goal_id"', html)
+            report_data = json.loads((run / "reports" / "report-data.json").read_text(encoding="utf-8"))
+            self.assertEqual(report_data["snapshots"][0]["current_state"], "understand")
+            self.assertEqual(report_data["snapshots"][-1]["current_state"], "review")
             self.assertTrue((run / "reports" / "progress.md").exists())
             self.assertTrue((run / "reports" / "report-data.json").exists())
 
