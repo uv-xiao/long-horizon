@@ -3,6 +3,9 @@
 This note records what the system-test suite proves for the v1 runtime and how
 a human reviewer can inspect the generated artifacts.
 
+For a more detailed design-to-implementation proof chain, see
+[v1-implementation-verification-guide.md](v1-implementation-verification-guide.md).
+
 ## Test Commands
 
 - `python -m unittest discover -s tests`
