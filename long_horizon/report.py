@@ -13,9 +13,12 @@ from .workflow import allowed_next
 def generate_report(root: str | Path, goal_id: str, run_id: str) -> dict[str, Any]:
     data = build_report_data(root, goal_id, run_id)
     rdir = reports_dir(root, goal_id, run_id)
+    slides = build_slides_data(data)
     write_json(rdir / "report-data.json", data)
+    write_json(rdir / "slides-data.json", slides)
     write_text(rdir / "progress.md", render_markdown(data))
     write_text(rdir / "progress.html", render_html(data))
+    write_text(rdir / "slides.html", render_slides_html(slides))
     return data
 
 
@@ -109,7 +112,7 @@ def render_markdown(data: dict[str, Any]) -> str:
     lines.extend(["", "## Recent Events"])
     for event in recent:
         lines.append(f"- `{event['event_id']}` `{event['event_type']}` from `{event['process_id']}`")
-    lines.extend(["", "## Report", "", "Open `progress.html` for playback, event lanes, graph, and inspector."])
+    lines.extend(["", "## Report", "", "Open `progress.html` for playback, event lanes, graph, and inspector. Open `slides.html` for timeline slides."])
     return "\n".join(lines) + "\n"
 
 
@@ -136,6 +139,7 @@ pre {{ white-space: pre-wrap; }}
 <main>
   <section>
     <label>Event sequence <input id="slider" type="range" min="0" max="{max(0, len(data['events']) - 1)}" value="{max(0, len(data['events']) - 1)}"></label>
+    <p><a href="slides.html">Open timeline slides</a></p>
     <div id="graph"></div>
     <h2>Event Lanes</h2>
     <div id="lanes" class="lane"></div>
@@ -186,6 +190,109 @@ function draw(idx) {{
 function inspect(obj) {{ inspector.textContent = JSON.stringify(obj, null, 2); }}
 slider.oninput = () => draw(Number(slider.value));
 draw(Number(slider.value));
+</script>
+</html>
+"""
+
+
+def build_slides_data(data: dict[str, Any]) -> dict[str, Any]:
+    slides = []
+    for idx, snapshot in enumerate(data["snapshots"]):
+        event = data["events"][idx] if idx < len(data["events"]) else {}
+        slides.append(
+            {
+                "index": idx,
+                "title": f"{idx}: {event.get('event_type', 'initial')}",
+                "event": event,
+                "snapshot": snapshot,
+                "visible_edges": [
+                    edge
+                    for edge in data["communication_edges"]
+                    if edge.get("event_id") in snapshot.get("visible_event_ids", []) or edge.get("kind") == "spawn"
+                ],
+                "human_comments": [
+                    comment for comment in data["human_comments"] if comment.get("event_id") in snapshot.get("visible_event_ids", [])
+                ],
+                "observer_interventions": [
+                    item for item in data["observer_interventions"] if item.get("event_id") in snapshot.get("visible_event_ids", [])
+                ],
+            }
+        )
+    return {
+        "goal_id": data["goal_id"],
+        "run_id": data["run_id"],
+        "timeline": {"axis": data["playback"]["axis"], "count": len(slides)},
+        "processes": data["processes"],
+        "slides": slides,
+    }
+
+
+def render_slides_html(slides_data: dict[str, Any]) -> str:
+    payload = json.dumps(slides_data, ensure_ascii=False)
+    return f"""<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Long-Horizon Timeline Slides</title>
+<style>
+body {{ margin: 0; font-family: system-ui, sans-serif; color: #15202b; background: #f6f6f3; }}
+header {{ padding: 14px 18px; background: #213547; color: white; display: flex; justify-content: space-between; gap: 16px; align-items: center; }}
+main {{ padding: 16px; display: grid; grid-template-columns: 1fr 320px; gap: 16px; }}
+.slide {{ background: white; border: 1px solid #d2d2cb; border-radius: 6px; padding: 14px; min-height: 520px; }}
+.timeline {{ display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }}
+.timeline button {{ border: 1px solid #b8b8b0; background: #fbfbf9; border-radius: 4px; padding: 4px 7px; cursor: pointer; }}
+.timeline button.active {{ background: #2f6f73; color: white; }}
+.process-map svg {{ width: 100%; min-height: 330px; }}
+.node {{ fill: #fdfdfb; stroke: #315f72; stroke-width: 1.5; }}
+.edge {{ stroke: #9a6b38; stroke-width: 1.5; marker-end: url(#arrow); }}
+aside {{ background: white; border: 1px solid #d2d2cb; border-radius: 6px; padding: 12px; }}
+pre {{ white-space: pre-wrap; font-size: 12px; }}
+</style>
+<header><h1>Timeline Slides</h1><div>Goal {html.escape(slides_data['goal_id'])} / Run {html.escape(slides_data['run_id'])}</div></header>
+<main>
+  <section class="slide" id="slide"></section>
+  <aside>
+    <h2>Inspector</h2>
+    <pre id="inspector"></pre>
+  </aside>
+</main>
+<script id="slides-data" type="application/json">{html.escape(payload)}</script>
+<script>
+const data = JSON.parse(document.getElementById('slides-data').textContent);
+const slideEl = document.getElementById('slide');
+const inspector = document.getElementById('inspector');
+let index = Math.max(0, data.slides.length - 1);
+function processMap(slide) {{
+  const nodes = slide.snapshot.processes || [];
+  const edges = slide.visible_edges || [];
+  let svg = '<svg viewBox="0 0 760 420" role="img"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#9a6b38"/></marker></defs>';
+  nodes.forEach((n, i) => {{
+    n._x = 40 + (i % 3) * 235; n._y = 42 + Math.floor(i / 3) * 112;
+    svg += `<rect class="node" x="${{n._x}}" y="${{n._y}}" width="195" height="74" rx="6"></rect>`;
+    svg += `<text x="${{n._x + 10}}" y="${{n._y + 24}}">${{n.process_id}} (${{n.role}})</text>`;
+    svg += `<text x="${{n._x + 10}}" y="${{n._y + 46}}">status: ${{n.status}}</text>`;
+    svg += `<text x="${{n._x + 10}}" y="${{n._y + 64}}">state: ${{n.workflow_state}}</text>`;
+  }});
+  edges.forEach(e => {{
+    const from = nodes.find(n => n.process_id === e.from), to = nodes.find(n => n.process_id === e.to);
+    if (from && to) svg += `<line class="edge" x1="${{from._x+195}}" y1="${{from._y+37}}" x2="${{to._x}}" y2="${{to._y+37}}"></line>`;
+  }});
+  return svg + '</svg>';
+}}
+function draw(i) {{
+  index = i;
+  const slide = data.slides[index] || {{event: {{}}, snapshot: {{}}}};
+  slideEl.innerHTML = `<article data-slide-index="${{index}}"><h2>${{slide.title}}</h2><p>Workflow state: <strong>${{slide.snapshot.current_state || ''}}</strong></p><div class="process-map">${{processMap(slide)}}</div><h3>Human comments</h3><p>${{slide.human_comments.length}}</p><h3>Observer interventions</h3><p>${{slide.observer_interventions.length}}</p><div class="timeline">${{timeline()}}</div></article>`;
+  inspector.textContent = JSON.stringify(slide, null, 2);
+  document.querySelectorAll('.timeline button').forEach((button, idx) => button.classList.toggle('active', idx === index));
+}}
+function timeline() {{
+  return data.slides.map((slide, i) => `<button onclick="draw(${{i}})">${{i}}</button>`).join('');
+}}
+document.addEventListener('keydown', event => {{
+  if (event.key === 'ArrowRight') draw(Math.min(data.slides.length - 1, index + 1));
+  if (event.key === 'ArrowLeft') draw(Math.max(0, index - 1));
+}});
+draw(index);
 </script>
 </html>
 """

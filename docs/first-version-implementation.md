@@ -25,7 +25,7 @@ Create the first usable version of the template that can be installed into an ex
 ## Non-Goals
 
 - No full H2-style runtime in the first version.
-- No live dashboard, slides, Feishu integration, or web app in the first version.
+- No hosted dashboard, Feishu integration, or external web app in the first version.
 - No nested execution loop that competes with Codex `/goal`.
 - No task-specific remote execution, benchmark, GPU, or kernel adapter as a default requirement.
 
@@ -79,6 +79,9 @@ long_horizon/
   process.py
   observe.py
   report.py
+  report_server.py
+  git_adapter.py
+  github_adapter.py
 ```
 
 The installer should inspect existing target-repo agent files, propose an install plan, and only then write template artifacts.
@@ -129,7 +132,8 @@ The first CLI should be a Python module with minimal dependencies. v1 commands s
 ```bash
 python -m long_horizon validate --goal <goal-id> --run <run-id>
 python -m long_horizon transition --goal <goal-id> --run <run-id> --to review_required
-python -m long_horizon report --goal <goal-id> --run <run-id>
+python -m long_horizon report generate --goal <goal-id> --run <run-id>
+python -m long_horizon report serve --goal <goal-id> --run <run-id>
 ```
 
 Python is the right first runtime because workflow validation, JSONL ledgers, Markdown checks, file operations, and static HTML/SVG generation are all direct and testable in one small module. Shell scripts would become brittle once cross-file validation and reporting grow.
@@ -706,13 +710,16 @@ JSON Schema files may be added later as documentation or editor assistance, but 
 
 ### Reporter visualization
 
-The reporter should generate Markdown plus one static HTML report with embedded SVG sections similar in spirit to Humanize H2 visualizations. This is a reporting adapter, not a live workflow runtime.
+The reporter should generate Markdown plus static HTML report and slide views with embedded SVG sections similar in spirit to Humanize H2 visualizations. This is a reporting adapter, not the workflow runtime.
 
 Required generated files:
 
 ```text
 runs/<run-id>/reports/progress.md
 runs/<run-id>/reports/progress.html
+runs/<run-id>/reports/report-data.json
+runs/<run-id>/reports/slides.html
+runs/<run-id>/reports/slides-data.json
 runs/<run-id>/reports/agent-brief.md
 ```
 

@@ -8,11 +8,14 @@ from . import __version__
 from .comments import import_comments
 from .config import load_config, set_config_value, validate_config
 from .goal import create_goal, create_run
+from .git_adapter import import_child_state, merge_child_branch, spawn_child_worktree
+from .github_adapter import GitHubAdapter
 from .install import install
 from .logger import append_event, append_loose
 from .observer import create_observer, record_intervention
 from .process import create_process, heartbeat, interrupt, resume
 from .report import generate_report
+from .report_server import ReportServer
 from .transition import transition
 from .validators import validate_root
 
@@ -93,6 +96,29 @@ def main(argv: list[str] | None = None) -> int:
             pp.add_argument("--reason", required=True)
         if name == "resume":
             pp.add_argument("--new-session", required=True)
+    pp = psub.add_parser("spawn-child-worktree")
+    pp.add_argument("--root", required=True)
+    pp.add_argument("--goal-id", required=True)
+    pp.add_argument("--run-id", required=True)
+    pp.add_argument("--parent-process-id", required=True)
+    pp.add_argument("--process-id", required=True)
+    pp.add_argument("--branch", required=True)
+    pp.add_argument("--worktree-path", required=True)
+    pp = psub.add_parser("import-child")
+    pp.add_argument("--root", required=True)
+    pp.add_argument("--goal-id", required=True)
+    pp.add_argument("--run-id", required=True)
+    pp.add_argument("--child-worktree-path", required=True)
+    pp.add_argument("--child-process-id", required=True)
+    pp.add_argument("--artifact-path", action="append", default=[])
+    pp.add_argument("--target-process-id", default="primary")
+    pp = psub.add_parser("merge-child-branch")
+    pp.add_argument("--root", required=True)
+    pp.add_argument("--goal-id", required=True)
+    pp.add_argument("--run-id", required=True)
+    pp.add_argument("--child-process-id", required=True)
+    pp.add_argument("--branch", required=True)
+    pp.add_argument("--target-process-id", default="primary")
 
     p = sub.add_parser("observer")
     osub = p.add_subparsers(dest="observer_cmd", required=True)
@@ -116,6 +142,12 @@ def main(argv: list[str] | None = None) -> int:
     rp.add_argument("--root", required=True)
     rp.add_argument("--goal-id", required=True)
     rp.add_argument("--run-id", required=True)
+    rp = repsub.add_parser("serve")
+    rp.add_argument("--root", required=True)
+    rp.add_argument("--goal-id", required=True)
+    rp.add_argument("--run-id", required=True)
+    rp.add_argument("--host", default="127.0.0.1")
+    rp.add_argument("--port", type=int, default=8765)
 
     p = sub.add_parser("comments")
     csub = p.add_subparsers(dest="comments_cmd", required=True)
@@ -123,6 +155,11 @@ def main(argv: list[str] | None = None) -> int:
     cp.add_argument("--root", required=True)
     cp.add_argument("--goal-id", required=True)
     cp.add_argument("--run-id", required=True)
+
+    p = sub.add_parser("github")
+    ghsub = p.add_subparsers(dest="github_cmd", required=True)
+    gp = ghsub.add_parser("repo-info")
+    gp.add_argument("--root", required=True)
 
     args = parser.parse_args(argv)
     result = _dispatch(args)
@@ -172,14 +209,34 @@ def _dispatch(args: argparse.Namespace):
         if args.process_cmd == "resume":
             resume(args.root, args.goal_id, args.run_id, args.process_id, args.new_session)
             return {"resumed": args.process_id}
+        if args.process_cmd == "spawn-child-worktree":
+            return spawn_child_worktree(args.root, args.goal_id, args.run_id, args.parent_process_id, args.process_id, args.branch, args.worktree_path)
+        if args.process_cmd == "import-child":
+            return import_child_state(
+                args.root,
+                args.goal_id,
+                args.run_id,
+                child_worktree_path=args.child_worktree_path,
+                child_process_id=args.child_process_id,
+                artifact_paths=args.artifact_path,
+                target_process_id=args.target_process_id,
+            )
+        if args.process_cmd == "merge-child-branch":
+            return merge_child_branch(args.root, args.goal_id, args.run_id, args.child_process_id, args.branch, args.target_process_id)
     if args.cmd == "observer":
         if args.observer_cmd == "create":
             return {"observer": str(create_observer(args.root, args.goal_id, args.run_id, args.process_id, args.observe_target))}
         return record_intervention(args.root, args.goal_id, args.run_id, args.observer_id, args.target_process_id, args.message)
-    if args.cmd == "report" and args.report_cmd == "generate":
-        return generate_report(args.root, args.goal_id, args.run_id)
+    if args.cmd == "report":
+        if args.report_cmd == "generate":
+            return generate_report(args.root, args.goal_id, args.run_id)
+        if args.report_cmd == "serve":
+            ReportServer(args.root, args.goal_id, args.run_id, args.host, args.port).serve_forever()
+            return None
     if args.cmd == "comments" and args.comments_cmd == "import":
         return {"imported": import_comments(args.root, args.goal_id, args.run_id)}
+    if args.cmd == "github" and args.github_cmd == "repo-info":
+        return GitHubAdapter(args.root).repo_info()
     raise SystemExit("unknown command")
 
 

@@ -319,11 +319,10 @@ Purpose: turn a long run into reusable team knowledge and improve the template i
 Reporting:
 
 - Human reports are generated from artifacts, not chat memory.
-- Markdown report is required.
+- Markdown report, static HTML/SVG playback, and timeline slides are required.
 - Optional presentation adapters:
   - CLI report for terminal;
   - Feishu/GitHub notification;
-  - frontend slides for demos;
   - local dashboard or H2-style view for live workflow state.
 
 Memory:
@@ -482,13 +481,13 @@ Required:
 - Final report.
 - Main timeline with compact observer intervention markers.
 - Dedicated observer intervention lane/table with target process, trigger evidence, steering message, delivery result, and acknowledgement state.
+- Static HTML/SVG progress view and timeline slide view for human inspection.
 
 Optional:
 
 - CLI notification.
 - Feishu/GitHub update.
-- frontend slides.
-- local dashboard.
+- local dashboard or hosted view.
 - configured reporter analysis on the timeline for human review.
 
 The reporter does not own canonical task state or append-only event history. It may, when configured, write derived timeline annotations, summaries, suspected causal links, risk notes, and review questions beside the source-backed timeline. Those annotations are reporter-authored analysis for humans to accept, reject, or supersede; they do not rewrite ledgers, task boards, observer boards, or workflow state.
