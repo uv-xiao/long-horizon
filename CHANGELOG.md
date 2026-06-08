@@ -44,6 +44,7 @@ This file tracks commit/PR-sized changes while the template evolves. It is not a
 - Hardened system tests with Humanize v1-style nested builder/reviewer plus fork-join exploration, Humanize v2-style plan/RLCR/alignment workflow, CLI-driven fixed-agent report generation, and a coverage note for remaining v1 gaps.
 - Added the v1 local report server, timeline slide artifacts, real git worktree child spawning with copied `.long-horizon/` state, parent-side child artifact import and branch merge, GitHub adapter local-auth smoke coverage, and an updated feature-by-feature coverage guide.
 - Added a detailed v1 implementation and verification guide that maps each design mechanism to implementation files, test design, inspected artifacts, and the reason the evidence proves the mechanism.
+- Added workflow merge strategy documentation, parent-side process merge artifacts, and a persistent calculator demo that uses child worktrees, optional Codex candidate generation, shortest-passing selection, branch merge, and durable reports for human inspection.
 - Added initial installable configuration catalog and policy-update skill templates.
 - Narrowed the runtime `.long-horizon/` ignore rule so tracked template fixtures under `templates/` can include `.long-horizon/` content.
 - Resolved v1 reporting views: one static HTML report embeds SVG workflow projection generated from flow snapshot, boards, and transition history.

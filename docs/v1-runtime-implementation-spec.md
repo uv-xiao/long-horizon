@@ -97,6 +97,13 @@ Acceptance bar:
 - If an implementation problem appears, exploit practical alternatives to make
   the end-to-end mechanism work instead of stopping at scaffolding. Record
   intentionally deferred gaps in `TODO.md`.
+- The implementation should also provide a persistent human-review demo for
+  realistic inspection when the automated tests use temporary directories. The
+  v1 demo is the shortest-expression-calculator workflow documented in
+  `docs/persistent-calculator-demo.md`: it runs a Humanize v1-style loop,
+  forks at least three child language candidates, imports child evidence,
+  selects and merges the shortest passing candidate, and leaves reports,
+  ledgers, branches, and worktrees on disk until explicitly cleaned.
 - The final verification must report test commands, results, deferred gaps, and
   the commit pushed.
 
@@ -424,6 +431,24 @@ from = "review"
 to = "completed"
 requires_human = false
 ```
+
+Flows that promote child work may include merge strategy declarations:
+
+```toml
+[[merge_strategies]]
+id = "shortest_passing_candidate"
+from_state = "merge_selection"
+candidate_processes = ["candidate-a", "candidate-b", "candidate-c"]
+selection_metric = "task_defined"
+repository_strategy = "merge_child_branch_no_ff"
+workflow_imports = ["candidate_summary", "evaluation", "adapter_note", "process_merge_artifact"]
+required_checks = ["selected_candidate_tests_passed"]
+promotion_policy = "parent_selects_candidate"
+rejection_policy = "import compact summaries; leave full failed artifacts in child state"
+```
+
+The runtime records repository merge results with `process merge-child-branch`
+and records workflow merge decisions in `artifacts/process-merges/`.
 
 Board:
 
@@ -1002,7 +1027,11 @@ The implementation is complete enough when all are true:
    slider data, process/workflow state, event lanes, and inspector data.
 9. `progress.md` summarizes the same run for human reading.
 10. A pushed comment envelope can be imported as a typed human event.
-11. Tests pass, or any intentionally deferred item is explicit in `TODO.md`.
+11. Clean child branch merges produce both git provenance and a parent-side
+    workflow merge artifact under `artifacts/process-merges/`.
+12. The persistent calculator demo can be run for human inspection, including
+    Codex-backed child candidate generation when `--use-codex` is enabled.
+13. Tests pass, or any intentionally deferred item is explicit in `TODO.md`.
 
 ## Commit And Documentation Rules
 

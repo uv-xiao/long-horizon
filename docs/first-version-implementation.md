@@ -556,6 +556,22 @@ The workflow merge must create a parent-side merge artifact:
 runs/<run-id>/artifacts/process-merges/<child-process-id>-merge.md
 ```
 
+When a workflow state can promote child work, the run's `flow.snapshot.toml`
+should include a merge strategy declaration. A minimal v1 shape is:
+
+```toml
+[[merge_strategies]]
+id = "shortest_passing_candidate"
+from_state = "merge_selection"
+candidate_processes = ["candidate-a", "candidate-b", "candidate-c"]
+selection_metric = "task_defined"
+repository_strategy = "merge_child_branch_no_ff"
+workflow_imports = ["candidate_summary", "evaluation", "adapter_note", "process_merge_artifact"]
+required_checks = ["selected_candidate_tests_passed"]
+promotion_policy = "parent_selects_candidate"
+rejection_policy = "import compact summaries; leave full failed artifacts in child state"
+```
+
 The merge artifact should record:
 
 - child process id and lane id;
@@ -629,6 +645,7 @@ The first version should not be Markdown-only. Markdown remains the human-facing
 
 - `contract.md`: human-readable goal, constraints, non-goals, and acceptance criteria.
 - `flow.toml`: declarative workflow states, transitions, required artifacts, checks, and gates.
+- `flow.toml` may also declare `merge_strategies`: named parent-side merge policies that describe candidate selectors, repository strategy, workflow imports, required checks, promotion policy, and rejection policy.
 - `runs/<run-id>/flow.snapshot.toml`: immutable copy of the goal flow captured when the run starts.
 - `runs/<run-id>/boards/*.toml`: mutable task workflow state for one execution attempt, such as current phase, active step, blockers, and candidate scoreboard.
 - `runs/<run-id>/observer/*.toml`: mutable observer state for run health, such as drift score, retry pressure, evidence gaps, watchdog findings, budget pressure, and loop suspicion.

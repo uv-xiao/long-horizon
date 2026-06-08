@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .io import copy_file, write_json
+from .io import copy_file, write_json, write_text
 from .logger import append_event
 from .paths import lh_root, run_dir
 from .process import create_process
@@ -119,6 +119,8 @@ def merge_child_branch(
 ) -> dict[str, Any]:
     root_path = Path(root).resolve()
     before = _run_git(root_path, "rev-parse", "HEAD").strip()
+    child_head = _run_git(root_path, "rev-parse", branch).strip()
+    merge_artifact_rel = Path("artifacts") / "process-merges" / f"{child_process_id}-merge.md"
     proc = subprocess.run(
         ["git", "merge", "--no-ff", "--no-edit", branch],
         cwd=root_path,
@@ -138,13 +140,45 @@ def merge_child_branch(
                 "branch": branch,
                 "target_process_id": target_process_id,
                 "before_head": before,
+                "child_head": child_head,
                 "stdout": proc.stdout,
                 "stderr": proc.stderr,
+                "merge_artifact": str(merge_artifact_rel),
             },
             process_id=target_process_id,
         )
-        return {"status": "failed", "branch": branch, "stdout": proc.stdout, "stderr": proc.stderr}
+        _write_merge_artifact(
+            root_path,
+            goal_id,
+            run_id,
+            merge_artifact_rel,
+            child_process_id,
+            branch,
+            target_process_id,
+            before,
+            before,
+            child_head,
+            "failed",
+            proc.stdout,
+            proc.stderr,
+        )
+        return {"status": "failed", "branch": branch, "stdout": proc.stdout, "stderr": proc.stderr, "merge_artifact": str(merge_artifact_rel)}
     after = _run_git(root_path, "rev-parse", "HEAD").strip()
+    _write_merge_artifact(
+        root_path,
+        goal_id,
+        run_id,
+        merge_artifact_rel,
+        child_process_id,
+        branch,
+        target_process_id,
+        before,
+        after,
+        child_head,
+        "merged",
+        proc.stdout,
+        proc.stderr,
+    )
     append_event(
         root_path,
         goal_id,
@@ -157,10 +191,61 @@ def merge_child_branch(
             "target_process_id": target_process_id,
             "before_head": before,
             "after_head": after,
+            "child_head": child_head,
+            "merge_artifact": str(merge_artifact_rel),
         },
         process_id=target_process_id,
     )
-    return {"status": "merged", "branch": branch, "before_head": before, "after_head": after}
+    return {"status": "merged", "branch": branch, "before_head": before, "after_head": after, "merge_artifact": str(merge_artifact_rel)}
+
+
+def _write_merge_artifact(
+    root: Path,
+    goal_id: str,
+    run_id: str,
+    rel_path: Path,
+    child_process_id: str,
+    branch: str,
+    target_process_id: str,
+    before_head: str,
+    after_head: str,
+    child_head: str,
+    status: str,
+    stdout: str,
+    stderr: str,
+) -> None:
+    body = "\n".join(
+        [
+            "# Process Merge",
+            "",
+            f"- child_process_id: `{child_process_id}`",
+            f"- target_process_id: `{target_process_id}`",
+            f"- child_branch: `{branch}`",
+            f"- child_head: `{child_head}`",
+            f"- parent_before_head: `{before_head}`",
+            f"- parent_after_head: `{after_head}`",
+            f"- status: `{status}`",
+            f"- git_strategy: `merge --no-ff --no-edit`",
+            "",
+            "## Imported Repository Content",
+            "",
+            "Repository content was imported through git. Workflow evidence is recorded in parent `.long-horizon/` state.",
+            "",
+            "## Stdout",
+            "",
+            "```text",
+            stdout.strip(),
+            "```",
+            "",
+            "## Stderr",
+            "",
+            "```text",
+            stderr.strip(),
+            "```",
+            "",
+        ]
+    )
+    write_text(run_dir(root, goal_id, run_id) / rel_path, body)
 
 
 def _copy_long_horizon_state(root: Path, child_path: Path) -> None:

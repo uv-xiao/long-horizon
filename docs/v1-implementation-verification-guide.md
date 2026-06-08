@@ -549,6 +549,72 @@ test proves state divergence by writing a child event and verifying it is absent
 from the parent until explicit import. The merge test proves repository content
 can flow back through git while runtime evidence records the merge separately.
 
+## Persistent Calculator Demo
+
+### Design Intent
+
+Temporary system tests prove correctness automatically, but human reviewers also
+need a durable run they can open, inspect, and clean up explicitly. The
+calculator demo exercises the same process model with a small real task:
+produce the shortest passing expression calculator by forking child worktrees
+for multiple language candidates and merging the winner.
+
+### Implementation
+
+- `scripts/persistent_calculator_demo.py`
+  - creates a persistent parent branch and three persistent child branches;
+  - installs the template into the parent worktree;
+  - creates a calculator goal/run with a Humanize v1-style inner loop;
+  - optionally invokes `codex exec` in each child process worktree;
+  - records fixed input/output evaluations for each candidate;
+  - imports child artifacts into parent state;
+  - selects the shortest passing candidate and merges its branch;
+  - writes parent-side git and workflow merge artifacts;
+  - generates `progress.html`, `slides.html`, and JSON report data;
+  - provides `status` and `clean` commands for reviewers.
+- `docs/persistent-calculator-demo.md`
+  - documents the run command, persistent branches, key artifacts, and cleanup.
+
+### Test Design
+
+This is a reviewer-facing scenario rather than a unit test. Run:
+
+```bash
+python scripts/persistent_calculator_demo.py run --reset --use-codex
+```
+
+The fixed task cases are deterministic:
+
+- `1+2*3` -> `7.0`
+- `(8-3)/5` -> `1.0`
+- `2**3+4` -> `12.0`
+- `-3+10/2` -> `2.0`
+
+The demo is considered valid only if all three child candidates run, the parent
+selects one passing candidate, the selected branch merges cleanly, and reports
+show the process/workflow timeline with human and observer events.
+
+### Files Opened For Validation
+
+- `../long-horizon-calculator-demo/demo-summary.json`
+- `../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/reports/progress.html`
+- `../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/reports/slides.html`
+- `../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/reports/report-data.json`
+- `../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/artifacts/selection/selected-candidate.json`
+- `../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/artifacts/process-merges/`
+- `../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/logs/`
+- `../long-horizon-calculator-demo/worktrees/candidate-*/.long-horizon/`
+- `../long-horizon-calculator-demo/host-artifacts/*-codex-output.md`
+
+### Why This Works
+
+The demo proves the runtime can preserve a real long-horizon execution for
+manual review. It uses real git branches/worktrees, real child-local state
+copies, real candidate source files, real fixed I/O evaluation, real child
+artifact import, and real branch merge. When `--use-codex` is enabled, the
+candidate source files are produced through the Codex substrate adapter while
+workflow state still advances only through long-horizon transitions.
+
 ## GitHub Adapter
 
 ### Design Intent

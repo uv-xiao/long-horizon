@@ -152,6 +152,10 @@ class ReportServerGitGithubSystemTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "merged")
         self.assertEqual((root / "feature.txt").read_text(encoding="utf-8"), "merged child branch output\n")
+        merge_artifact = run_dir(root, goal_id, run_id) / "artifacts" / "process-merges" / "candidate-merge-merge.md"
+        self.assertTrue(merge_artifact.exists())
+        self.assertIn("candidate-merge", merge_artifact.read_text(encoding="utf-8"))
+        self.assertEqual(result["merge_artifact"], "artifacts/process-merges/candidate-merge-merge.md")
         events = read_jsonl(run_dir(root, goal_id, run_id) / "logs" / "process-events.jsonl")
         self.assertTrue(any(event["event_type"] == "child_branch_merged" for event in events))
 

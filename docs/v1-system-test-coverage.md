@@ -95,8 +95,9 @@ For a more detailed design-to-implementation proof chain, see
     `test_parent_can_merge_child_branch_after_worktree_exploration`.
   - Uses a real child worktree branch, commits a tracked file in the child, then
     merges the child branch into the parent checkout.
-  - Validates merged repository content and append-only
-    `child_branch_merged` provenance in `process-events.jsonl`.
+  - Validates merged repository content, append-only `child_branch_merged`
+    provenance in `process-events.jsonl`, and parent-side merge artifacts under
+    `artifacts/process-merges/`.
 
 - **Cross-worktree `.long-horizon/` copy-on-write**
   - Covered by the same real worktree test.
@@ -115,6 +116,15 @@ For a more detailed design-to-implementation proof chain, see
   - Covered by `test_cli_driven_agent_mimic_generates_complete_playback_report`.
   - Validates the public `python -m long_horizon` path for install, goal/run
     creation, transitions, typed logging, and report generation.
+
+- **Persistent reviewer demo**
+  - Covered by `scripts/persistent_calculator_demo.py` and documented in
+    `docs/persistent-calculator-demo.md`.
+  - Validates a durable Humanize v1-style shortest-calculator run with three
+    child language candidates, optional real `codex exec` candidate generation,
+    observer steering, local human approvals, imported child artifacts,
+    shortest-passing selection, child branch merge, merge artifacts, and
+    generated reports that remain available for manual inspection.
 
 ## Human Review Guide
 
@@ -145,6 +155,19 @@ first event to the last. The process map should reveal child processes,
 observer/task edges, human comment markers, transition history, and artifact
 imports over time. Open `slides.html` to inspect one event per slide with the
 same timeline context.
+
+For persistent visual acceptance, run:
+
+```bash
+python scripts/persistent_calculator_demo.py run --reset --use-codex
+python scripts/persistent_calculator_demo.py status
+```
+
+Then open the paths printed by `status`. Clean them with:
+
+```bash
+python scripts/persistent_calculator_demo.py clean
+```
 
 ## Remaining Deferred Features
 
