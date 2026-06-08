@@ -147,6 +147,7 @@ def run_demo(demo_root: Path, use_codex: bool) -> None:
         append_event(child_path, GOAL_ID, RUN_ID, "process-events", "process_completed", {"wait_refs": [item["wait"]], "result": result}, process_id=item["process_id"])
         commit_child(child_path, item, result)
         import_child_state(parent, GOAL_ID, RUN_ID, child_path, item["process_id"], [f"artifacts/candidates/{item['process_id']}.md", f"artifacts/evaluations/{item['process_id']}.json", f"artifacts/adapters/codex-{item['process_id']}.md"])
+        append_event(parent, GOAL_ID, RUN_ID, "process-events", "process_completed", {"wait_refs": [item["wait"]], "source": "parent_join_after_import", "result": result}, process_id=item["process_id"])
         record_intervention(parent, GOAL_ID, RUN_ID, "calculator-watchdog", item["process_id"], f"iteration {index}: verify shortest passing calculator candidate in {item['language']}")
         next_state = f"candidate_iteration_{index + 1}" if index < len(LANGUAGES) else "merge_selection"
         require_applied(transition(parent, GOAL_ID, RUN_ID, "primary", next_state))
