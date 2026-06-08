@@ -16,6 +16,9 @@ Each policy entry should record:
 - `agent.substrate`: `codex-goal`, `codex`, `claude-code`, `humanize`, `native-process-agent`, or `manual`.
 - `agent.goal_mode`: whether Codex `/goal` is used as the continuation mechanism.
 - `agent.process_adapter`: how logical process operations map to the selected agent.
+- `agent.operation_mode`: `runtime-owned`, `native-agent`, or `hybrid`. This is selected during capability analysis and may be overridden during installation or task setup. Runtime-owned mode lets the template own durable process/workflow mechanics; native-agent mode configures an existing agent loop without duplicating it; hybrid mode splits responsibilities explicitly.
+- `agent.capability_cache`: `.long-horizon/agent-capabilities.toml` stores a fingerprinted analysis of existing repo and target-agent features. Refresh it when agent instructions, hooks, skills, or target-agent selection change.
+- `agent.native_feature_enablement`: native hooks, subagents, stop gates, review commands, or GUI/report features that should be enabled instead of reimplemented by the template.
 
 ## Process And Workspace
 

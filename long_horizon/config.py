@@ -8,7 +8,7 @@ from .paths import lh_root
 
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "agent": {"substrate": "codex-goal", "goal_mode": True, "process_adapter": "brief"},
+    "agent": {"substrate": "codex-goal", "goal_mode": True, "process_adapter": "brief", "operation_mode": "hybrid"},
     "process": {
         "workspace_mode": "worktree",
         "state_model": "copy_on_write",
@@ -25,6 +25,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 ALLOWED = {
     ("agent", "substrate"): {"codex-goal", "codex", "manual", "claude-code", "humanize", "native-process-agent"},
+    ("agent", "operation_mode"): {"runtime-owned", "native-agent", "hybrid"},
     ("process", "workspace_mode"): {"worktree", "original_checkout", "branchless_read_only", "native_process"},
     ("process", "branch_policy"): {"code_changes_require_branch", "read_only_branchless"},
     ("logging", "mode"): {"typed_plus_loose", "strict_typed", "loose"},
@@ -43,8 +44,11 @@ def load_config(root: str | Path) -> dict[str, Any]:
     return read_toml(path)
 
 
-def write_default_config(root: str | Path) -> None:
-    write_toml(config_path(root), DEFAULT_CONFIG)
+def write_default_config(root: str | Path, operation_mode: str | None = None) -> None:
+    data = {section: values.copy() if isinstance(values, dict) else values for section, values in DEFAULT_CONFIG.items()}
+    if operation_mode:
+        data.setdefault("agent", {})["operation_mode"] = operation_mode
+    write_toml(config_path(root), data)
 
 
 def validate_config_data(data: dict[str, Any]) -> list[str]:

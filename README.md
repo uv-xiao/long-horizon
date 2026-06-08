@@ -38,6 +38,8 @@ The template should be a small long-horizon operating system, not a flat feature
 
 The detailed v1 runtime build contract is [docs/v1-runtime-implementation-spec.md](docs/v1-runtime-implementation-spec.md). Use it when implementing the first version; this README remains the public architecture and product rationale.
 
+The next usability layer is defined in [docs/v2-template-usability-goal.md](docs/v2-template-usability-goal.md). It makes the template prompt-first: target-agent analysis, install planning, task setup, goal contracts, flow assembly, execution start, live operation, completion, and deposition are guided by installable skills and phase templates, with Python commands used as validators/state tools where the selected operation mode needs them.
+
 The core design principle is:
 
 Generality is in the mechanism; specificity is in the judgment.
@@ -62,6 +64,45 @@ The system has three layers:
 3. **Component layer** - installable skills, templates, hooks, and optional dashboards that implement the mechanisms for a concrete repo and agent runtime.
 
 This avoids overlap. For example, "draft-to-plan", "goal contract", and "user directives" are not separate features; they are parts of the **Goal Contract** phase. "checkpoint", "resume", and "commit policy" are not separate features; they are parts of the **Workspace and Version Control** mechanism.
+
+### Operation modes
+
+The installer and task-start phase analyze the target repository and selected
+agent, cache the result in `.long-horizon/agent-capabilities.toml`, and choose
+one operation mode:
+
+- **Runtime-owned**: the target agent is weak or manual, so the template owns
+  durable workflow state, transition validation, reports, comments, and
+  recovery briefs.
+- **Native-agent**: the target agent already has loop orchestration, hooks,
+  subagents, review, stop gates, or process/session controls. The template
+  installs prompts, policies, validators, and evidence/report surfaces without
+  duplicating the native loop.
+- **Hybrid**: the target agent owns some orchestration while the template owns
+  durable contracts, flow snapshots, evidence gates, reports, git/worktree
+  handling, or human interaction routing.
+
+This decision is an artifact, not doctrine. Re-run capability analysis or
+override `agent.operation_mode` when a repo/task needs different behavior.
+
+### Prompt-first usage flow
+
+1. Analyze the target agent and repository:
+   `python -m long_horizon capabilities analyze --root . --target-agent auto`
+2. Review `.long-horizon/agent-capabilities.md`,
+   `.long-horizon/decisions/operation-mode.md`, and
+   `.long-horizon/install-plan.md`.
+3. Install the mode-aware prompt/runtime surface:
+   `python -m long_horizon install --target . --apply`.
+4. Start a task from the human request:
+   `python -m long_horizon task setup --root . --request "<request>"`.
+5. Follow the installed phase skills in `.agents/skills/`: create the goal
+   contract, assemble the flow, start execution, operate checkpoints/fork-join
+   or recovery, and complete/deposit reusable knowledge.
+
+The installed prompts under `.agents/templates/long-horizon/` are the
+user-facing workflow. Python commands are validator and state tools used by
+those prompts when the selected operation mode needs them.
 
 ## Phase layer
 

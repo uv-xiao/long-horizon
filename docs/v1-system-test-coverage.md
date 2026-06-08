@@ -174,11 +174,19 @@ python scripts/persistent_calculator_demo.py clean
 
 ## Remaining Deferred Features
 
-- **Artifact retention/eviction/compression/externalization**: explicitly
-  deferred until large real task artifacts need lifecycle policy.
-- **Ledger repair tooling**: hash-chain append behavior is covered, but explicit
-  repair and reconciliation commands are not implemented.
+- **Real process supervisor**: v1 records durable logical process state, but
+  does not yet keep task, observer, reporter, retention, recovery, and other
+  meta-processes alive as supervised OS processes or adapter-backed handles.
+- **Artifact retention/eviction/compression/externalization sidecar**:
+  explicitly deferred until large real task artifacts need lifecycle policy.
+- **Ledger repair/reconciliation recovery process**: hash-chain append behavior
+  is covered, but explicit repair and reconciliation processes are not
+  implemented.
+- **Richer report GUI**: the v1 HTML/SVG reporter is only the current
+  human-inspection projection. Future versions should evaluate OMP/oh-my-pi,
+  Warp-style, or custom GUI adapters over the same `report-data.json` model.
 - **Remote execution, benchmark, GPU, and task-specific evaluator adapters**:
   intentionally outside the default v1 runtime.
-- **Git merge conflict remediation**: clean child branch merge is covered, but
-  conflict-resolution, rollback, and retry policy remain future mechanisms.
+- **Git merge conflict remediation workflow**: clean child branch merge is
+  covered, but conflict-resolution, rollback, retry policy, and merge-quality
+  evals remain future workflow mechanisms.

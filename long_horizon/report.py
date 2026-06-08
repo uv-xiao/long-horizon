@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .capabilities import load_capabilities
 from .io import read_jsonl, read_toml, write_json, write_text
 from .paths import boards_dir, processes_dir, reports_dir, run_dir
 from .workflow import allowed_next
@@ -33,9 +34,12 @@ def build_report_data(root: str | Path, goal_id: str, run_id: str) -> dict[str, 
     snapshots = [_snapshot_at(events[: idx + 1], processes, initial_state, idx) for idx in range(len(events))]
     workflow = _workflow_projection(flow, board, events)
     timeline = _timeline_projection(events, processes, edges, snapshots, workflow)
+    capabilities = load_capabilities(root)
     data = {
         "goal_id": goal_id,
         "run_id": run_id,
+        "operation_mode": capabilities.get("analysis", {}).get("operation_mode", "runtime-owned"),
+        "agent_capabilities": capabilities,
         "current_state": board.get("current_state"),
         "allowed_next": board.get("allowed_next", allowed_next(flow, board.get("current_state", ""))),
         "playback": {"axis": "event_sequence", "count": len(events), "current_index": max(0, len(events) - 1)},
@@ -55,6 +59,9 @@ def build_report_data(root: str | Path, goal_id: str, run_id: str) -> dict[str, 
 def generate_agent_brief(root: str | Path, goal_id: str, run_id: str, process_id: str = "primary") -> Path:
     rdir = run_dir(root, goal_id, run_id)
     board = read_toml(boards_dir(root, goal_id, run_id) / "task.toml")
+    capabilities = load_capabilities(root)
+    mode = capabilities.get("analysis", {}).get("operation_mode", "runtime-owned")
+    mode_details = capabilities.get("mode", {})
     process_path = processes_dir(root, goal_id, run_id) / f"{process_id}.toml"
     proc = read_toml(process_path) if process_path.exists() else {"process_id": process_id, "status": "unknown"}
     events = _unified_events(rdir)
@@ -71,8 +78,17 @@ def generate_agent_brief(root: str | Path, goal_id: str, run_id: str, process_id
 Process: `{process_id}`
 Role: `{proc.get('role', '')}`
 Status: `{proc.get('status', '')}`
+Operation mode: `{mode}`
 Workspace: `{proc.get('workspace_path', '')}`
 State root: `{proc.get('state_path', '')}`
+
+## Operation Mode Responsibilities
+
+Template owns:
+{_brief_items(mode_details.get('template_responsibilities', []))}
+
+Native agent owns:
+{_brief_items(mode_details.get('native_agent_responsibilities', []))}
 
 ## Workflow
 
@@ -106,6 +122,7 @@ def render_markdown(data: dict[str, Any]) -> str:
         "",
         f"Goal: `{data['goal_id']}`",
         f"Run: `{data['run_id']}`",
+        f"Operation mode: `{data.get('operation_mode', '')}`",
         f"Current state: `{data['current_state']}`",
         f"Allowed next: {', '.join(data['allowed_next']) or '(none)'}",
         "",
@@ -118,6 +135,12 @@ def render_markdown(data: dict[str, Any]) -> str:
         lines.append(f"- `{event['event_id']}` `{event['event_type']}` from `{event['process_id']}`")
     lines.extend(["", "## Report", "", "Open `progress.html` for the timeline report, message links, event details, and selected-state workflow diagram."])
     return "\n".join(lines) + "\n"
+
+
+def _brief_items(items: list[str]) -> str:
+    if not items:
+        return "- (none)"
+    return "\n".join(f"- {item}" for item in items)
 
 
 def _human_summary_html(comments: list[dict[str, Any]]) -> str:
@@ -339,7 +362,7 @@ pre {{ white-space: pre-wrap; font-size: 12px; }}
 .workflow-edge.allowed {{ stroke: #1d4f8f; stroke-width: 2.2; }}
 .summary-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }}
 </style>
-<header><h1>Long-Horizon Progress</h1><div>Goal {html.escape(data['goal_id'])} / Run {html.escape(data['run_id'])}</div></header>
+<header><h1>Long-Horizon Progress</h1><div>Goal {html.escape(data['goal_id'])} / Run {html.escape(data['run_id'])} / Mode {html.escape(str(data.get('operation_mode', '')))}</div></header>
 <main>
   <section>
     <h2>Execution Timeline</h2>

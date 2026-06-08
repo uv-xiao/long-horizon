@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from . import __version__
+from .capabilities import analyze_target, load_capabilities
 from .comments import import_comments
 from .config import load_config, set_config_value, validate_config
 from .goal import create_goal, create_run
@@ -16,6 +17,7 @@ from .observer import create_observer, record_intervention
 from .process import create_process, heartbeat, interrupt, resume
 from .report import generate_report
 from .report_server import ReportServer
+from .task_setup import create_task_setup
 from .transition import transition
 from .validators import validate_root
 
@@ -28,6 +30,19 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("install")
     p.add_argument("--target", required=True)
     p.add_argument("--apply", action="store_true")
+    p.add_argument("--target-agent", default="auto")
+    p.add_argument("--operation-mode", choices=["runtime-owned", "native-agent", "hybrid"])
+    p.add_argument("--force-analyze", action="store_true")
+
+    p = sub.add_parser("capabilities")
+    caps_sub = p.add_subparsers(dest="capabilities_cmd", required=True)
+    cp = caps_sub.add_parser("analyze")
+    cp.add_argument("--root", required=True)
+    cp.add_argument("--target-agent", default="auto")
+    cp.add_argument("--operation-mode", choices=["runtime-owned", "native-agent", "hybrid"])
+    cp.add_argument("--force", action="store_true")
+    cp = caps_sub.add_parser("show")
+    cp.add_argument("--root", required=True)
 
     p = sub.add_parser("config")
     csub = p.add_subparsers(dest="config_cmd", required=True)
@@ -52,6 +67,15 @@ def main(argv: list[str] | None = None) -> int:
     rp.add_argument("--root", required=True)
     rp.add_argument("--goal-id", required=True)
     rp.add_argument("--run-id", required=True)
+
+    p = sub.add_parser("task")
+    tsub = p.add_subparsers(dest="task_cmd", required=True)
+    tp = tsub.add_parser("setup")
+    tp.add_argument("--root", required=True)
+    tp.add_argument("--request", required=True)
+    tp.add_argument("--task-id")
+    tp.add_argument("--target-agent", default="auto")
+    tp.add_argument("--operation-mode", choices=["runtime-owned", "native-agent", "hybrid"])
 
     p = sub.add_parser("validate")
     p.add_argument("--root", required=True)
@@ -170,7 +194,22 @@ def main(argv: list[str] | None = None) -> int:
 
 def _dispatch(args: argparse.Namespace):
     if args.cmd == "install":
-        return {"install_plan": str(install(args.target, apply=args.apply))}
+        return {
+            "install_plan": str(
+                install(
+                    args.target,
+                    apply=args.apply,
+                    target_agent=args.target_agent,
+                    operation_mode=args.operation_mode,
+                    force_analyze=args.force_analyze,
+                )
+            )
+        }
+    if args.cmd == "capabilities":
+        if args.capabilities_cmd == "analyze":
+            return analyze_target(args.root, target_agent=args.target_agent, operation_mode=args.operation_mode, force=args.force)
+        if args.capabilities_cmd == "show":
+            return load_capabilities(args.root)
     if args.cmd == "config":
         if args.config_cmd == "show":
             return load_config(args.root)
@@ -185,6 +224,8 @@ def _dispatch(args: argparse.Namespace):
         return {"goal_dir": str(create_goal(args.root, args.goal_id, args.contract))}
     if args.cmd == "run" and args.run_cmd == "create":
         return {"run_dir": str(create_run(args.root, args.goal_id, args.run_id))}
+    if args.cmd == "task" and args.task_cmd == "setup":
+        return create_task_setup(args.root, args.request, task_id=args.task_id, target_agent=args.target_agent, operation_mode=args.operation_mode)
     if args.cmd == "validate":
         errors = validate_root(args.root, args.goal_id, args.run_id)
         if errors:
