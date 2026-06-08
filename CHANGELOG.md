@@ -5,7 +5,7 @@ This file tracks commit/PR-sized changes while the template evolves. It is not a
 ## Current Change
 
 - Started the first-version implementation PR with an implementation brief and decision list.
-- Resolved the v1 workflow-format decision around enforceable structured state, transition validation, and static HTML/SVG reporting.
+- Resolved the v1 workflow-format decision around enforceable structured state, transition validation, and static HTML timeline reporting.
 - Resolved workflow state ownership: only the transition tool mutates workflow boards.
 - Resolved workflow storage boundaries: stable goal contracts own runs, and mutable state is isolated per run.
 - Resolved flow mutability: each run snapshots the goal-level flow and validates transitions against the snapshot.
@@ -42,10 +42,11 @@ This file tracks commit/PR-sized changes while the template evolves. It is not a
 - Moved the v1 testing and acceptance bar to the top of the implementation specification, emphasizing focused unit tests and hard system tests over shallow helper coverage.
 - Implemented the first Python v1 runtime with installer, config validation, goal/run creation, typed and loose logging, transition validation, process interruption/resume, observer interventions, human report generation, pushed comment import, and focused unit/system tests.
 - Hardened system tests with Humanize v1-style nested builder/reviewer plus fork-join exploration, Humanize v2-style plan/RLCR/alignment workflow, CLI-driven fixed-agent report generation, and a coverage note for remaining v1 gaps.
-- Added the v1 local report server, timeline slide artifacts, real git worktree child spawning with copied `.long-horizon/` state, parent-side child artifact import and branch merge, GitHub adapter local-auth smoke coverage, and an updated feature-by-feature coverage guide.
+- Added the v1 local report server, timeline report artifacts, real git worktree child spawning with copied `.long-horizon/` state, parent-side child artifact import and branch merge, GitHub adapter local-auth smoke coverage, and an updated feature-by-feature coverage guide.
 - Added a detailed v1 implementation and verification guide that maps each design mechanism to implementation files, test design, inspected artifacts, and the reason the evidence proves the mechanism.
 - Added workflow merge strategy documentation, parent-side process merge artifacts, and a persistent calculator demo that uses child worktrees, optional Codex candidate generation, shortest-passing selection, branch merge, and durable reports for human inspection.
 - Fixed reporter rendering so `progress.html` and `slides.html` contain meaningful server-rendered process/event content, embed valid JSON for playback, and reconstruct timeline snapshots from the workflow initial state.
+- Reworked v1 reporting around one canonical Perfetto-like `progress.html` timeline with process lanes, state bars, event markers, inter-process message links, selected-state workflow diagrams, and compatibility-only slide aliases.
 - Added initial installable configuration catalog and policy-update skill templates.
 - Narrowed the runtime `.long-horizon/` ignore rule so tracked template fixtures under `templates/` can include `.long-horizon/` content.
 - Resolved v1 reporting views: one static HTML report embeds SVG workflow projection generated from flow snapshot, boards, and transition history.

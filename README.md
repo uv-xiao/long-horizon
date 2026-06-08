@@ -74,7 +74,7 @@ Inputs:
 - Target repository path.
 - Existing agent files such as `AGENTS.md`, `CLAUDE.md`, `.agents/`, `.claude/`, hooks, issue/PR docs, CI, and local scripts.
 - Target agent runtime: Codex `/goal`, Codex without `/goal`, Claude Code, Humanize, oh-my-pi, or another runner.
-- Human interaction preferences: plain Markdown, CLI prompts, Feishu CLI, GitHub issues/PR comments, generated slides, or a small local dashboard.
+- Human interaction preferences: plain Markdown, CLI prompts, Feishu CLI, GitHub issues/PR comments, a Perfetto-like local report timeline, or a small local dashboard.
 
 Outputs:
 
@@ -319,7 +319,7 @@ Purpose: turn a long run into reusable team knowledge and improve the template i
 Reporting:
 
 - Human reports are generated from artifacts, not chat memory.
-- Markdown report, static HTML/SVG playback, and timeline slides are required.
+- Markdown report and one static HTML Perfetto-like timeline are required.
 - Optional presentation adapters:
   - CLI report for terminal;
   - Feishu/GitHub notification;
@@ -481,7 +481,7 @@ Required:
 - Final report.
 - Main timeline with compact observer intervention markers.
 - Dedicated observer intervention lane/table with target process, trigger evidence, steering message, delivery result, and acknowledgement state.
-- Static HTML/SVG progress view and timeline slide view for human inspection.
+- Static HTML Perfetto-like progress timeline for human inspection.
 
 Optional:
 

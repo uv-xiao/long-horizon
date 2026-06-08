@@ -18,7 +18,7 @@ Create the first usable version of the template that can be installed into an ex
 4. Process, workspace, version, and checkpoint policy.
 5. Logging substrate.
 6. Reviewer prompts plus checkpoint and sidecar observer/watchdog processes.
-7. Markdown reports plus static HTML/SVG workflow visualization.
+7. Markdown reports plus a static HTML Perfetto-like timeline visualization.
 8. Completion audit.
 9. Custom Python validators for structured workflow files and Markdown contracts.
 
@@ -136,7 +136,7 @@ python -m long_horizon report generate --goal <goal-id> --run <run-id>
 python -m long_horizon report serve --goal <goal-id> --run <run-id>
 ```
 
-Python is the right first runtime because workflow validation, JSONL ledgers, Markdown checks, file operations, and static HTML/SVG generation are all direct and testable in one small module. Shell scripts would become brittle once cross-file validation and reporting grow.
+Python is the right first runtime because workflow validation, JSONL ledgers, Markdown checks, file operations, and static HTML timeline generation are all direct and testable in one small module. Shell scripts would become brittle once cross-file validation and reporting grow.
 
 The implementation should prefer the Python standard library. TOML is the canonical editable structured format for v1, read with `tomllib` on modern Python. JSONL is the canonical append-only ledger format.
 
@@ -727,7 +727,10 @@ JSON Schema files may be added later as documentation or editor assistance, but 
 
 ### Reporter visualization
 
-The reporter should generate Markdown plus static HTML report and slide views with embedded SVG sections similar in spirit to Humanize H2 visualizations. This is a reporting adapter, not the workflow runtime.
+The reporter should generate Markdown plus one canonical static HTML timeline
+view. `progress.html` is the human report surface. `slides.html`, if present,
+is only a compatibility alias to `progress.html`, not a second diagram system.
+This is a reporting adapter, not the workflow runtime.
 
 Required generated files:
 
@@ -735,8 +738,6 @@ Required generated files:
 runs/<run-id>/reports/progress.md
 runs/<run-id>/reports/progress.html
 runs/<run-id>/reports/report-data.json
-runs/<run-id>/reports/slides.html
-runs/<run-id>/reports/slides-data.json
 runs/<run-id>/reports/agent-brief.md
 ```
 
@@ -744,7 +745,13 @@ The static HTML report should include:
 
 - current workflow state and allowed next transitions;
 - observer health summary, including drift, evidence gaps, retry pressure, and watchdog alerts;
-- phase/step timeline with compact observer intervention markers;
+- a Perfetto-like horizontal event-sequence timeline;
+- one lane per task process, observer process, human channel, and system channel;
+- process state bars showing workflow state/status over event-index ranges;
+- clickable state bars that reveal the workflow state-transition diagram for that selected state;
+- event markers on their owning lanes, clickable to unfold payload and provenance details;
+- message bars/links between process lanes for spawn, steer, ack, artifact import, merge, review, handoff, policy, and human-comment routing events;
+- compact observer intervention and human comment markers in the main timeline;
 - dedicated observer intervention lane/table with target process, trigger evidence, message artifact/body, delivery channel, delivery result, and acknowledgement state;
 - required vs present artifacts;
 - blockers and human gates;
@@ -752,9 +759,10 @@ The static HTML report should include:
 
 The event timeline is source-backed and generated from typed state, ledgers, process metadata, and artifact references. The reporter should not rewrite those sources or silently edit canonical event history. However, the reporter is not read-only: when enabled by policy, it may write derived timeline analysis for human review. Examples include inferred causal links, suspicious gaps, risk notes, suggested next checks, reviewer questions, and short narrative summaries. These annotations must be marked as reporter analysis and point back to source events or artifacts when possible.
 
-### Workflow SVG generation
+### Timeline and workflow projection
 
-The workflow SVG should follow the Humanize H2 projection pattern without adopting H2 as a runtime dependency. H2 separates:
+The timeline should learn from Humanize H2's projection pattern without adopting
+H2 as a runtime dependency. H2 separates:
 
 1. workflow declaration;
 2. compiled graph;
@@ -767,7 +775,7 @@ v1 should use the same conceptual pipeline:
 flow.snapshot.toml + boards/*.toml + observer/*.toml + transitions.jsonl
 -> WorkflowGraph
 -> WorkflowProjection
--> inline SVG inside progress.html
+-> timeline lanes + selected-state transition diagram inside progress.html
 ```
 
 Generation steps:
@@ -782,14 +790,14 @@ Generation steps:
    - `failed`: latest transition into or out of this state failed;
    - `blocked`: current board state is this node and a blocker/human gate is active.
 5. Mark allowed next transitions from the current state.
-6. Render a deterministic SVG:
-   - nodes as labeled rectangles or circles;
-   - directed edges with arrow markers;
-   - current node emphasized;
-   - allowed next edges emphasized;
+6. Render deterministic state-transition detail for the selected state:
+   - workflow states as labeled nodes in declaration order;
+   - directed transitions with source/target ids;
+   - selected state emphasized;
+   - allowed next transitions emphasized;
    - completed path muted or green;
-   - failed/blocked nodes highlighted;
-   - loop/back edges drawn as curved paths.
+   - failed/blocked states highlighted;
+   - loop/back transitions shown as explicit curved or annotated links.
 
 The first renderer can use a simple deterministic layered layout rather than a graph layout dependency:
 
@@ -807,7 +815,10 @@ current_state = "running"
 
 The reporter uses that value to highlight the current node and uses the validated transition table to highlight allowed next edges. This mirrors H2's projection idea: the visualization is a projection of workflow state, not another source of truth.
 
-Reporter-authored timeline analysis can be rendered near the SVG or timeline, but it must remain visually and structurally separate from canonical state projection. If analysis later proves wrong, the correction is written as a new annotation or superseding report artifact rather than mutating the event ledger.
+Reporter-authored timeline analysis can be rendered near the timeline, but it
+must remain visually and structurally separate from canonical state projection.
+If analysis later proves wrong, the correction is written as a new annotation or
+superseding report artifact rather than mutating the event ledger.
 
 ### Commit and checkpoint policy
 
@@ -881,5 +892,5 @@ The first slice is useful if a user can:
 3. Create a goal contract and flow file.
 4. Validate and transition workflow state mechanically.
 5. Run a long-horizon task with Codex `/goal` while keeping durable artifacts.
-6. Inspect Markdown and static HTML/SVG reports.
+6. Inspect Markdown and static HTML timeline reports.
 7. Audit completion against acceptance criteria and non-goals.

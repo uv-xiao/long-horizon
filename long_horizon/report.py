@@ -31,6 +31,8 @@ def build_report_data(root: str | Path, goal_id: str, run_id: str) -> dict[str, 
     edges = _communication_edges(events, processes)
     initial_state = flow.get("flow", {}).get("initial_state", board.get("current_state"))
     snapshots = [_snapshot_at(events[: idx + 1], processes, initial_state, idx) for idx in range(len(events))]
+    workflow = _workflow_projection(flow, board, events)
+    timeline = _timeline_projection(events, processes, edges, snapshots, workflow)
     data = {
         "goal_id": goal_id,
         "run_id": run_id,
@@ -44,7 +46,8 @@ def build_report_data(root: str | Path, goal_id: str, run_id: str) -> dict[str, 
         "human_comments": _human_comments(events),
         "observer_interventions": _observer_interventions(events),
         "snapshots": snapshots,
-        "anchors": _anchors(events, processes, edges),
+        "timeline": timeline,
+        "anchors": _unique_anchors(_anchors(events, processes, edges) + _timeline_anchors(timeline)),
     }
     return data
 
@@ -113,65 +116,8 @@ def render_markdown(data: dict[str, Any]) -> str:
     lines.extend(["", "## Recent Events"])
     for event in recent:
         lines.append(f"- `{event['event_id']}` `{event['event_type']}` from `{event['process_id']}`")
-    lines.extend(["", "## Report", "", "Open `progress.html` for playback, event lanes, graph, and inspector. Open `slides.html` for timeline slides."])
+    lines.extend(["", "## Report", "", "Open `progress.html` for the timeline report, message links, event details, and selected-state workflow diagram."])
     return "\n".join(lines) + "\n"
-
-
-def _process_map_svg(processes: list[dict[str, Any]], edges: list[dict[str, Any]], visible_event_ids: list[str]) -> str:
-    nodes = [dict(proc) for proc in processes]
-    by_id: dict[str, dict[str, Any]] = {}
-    height = max(280, len(nodes) * 90 + 80)
-    svg = [
-        f'<svg viewBox="0 0 760 {height}" role="img" aria-label="process map">',
-        '<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#8b6f47"/></marker></defs>',
-    ]
-    for idx, node in enumerate(nodes):
-        x = 40 + (idx % 3) * 230
-        y = 40 + (idx // 3) * 110
-        node["_x"] = x
-        node["_y"] = y
-        by_id[str(node.get("process_id"))] = node
-        process_id = html.escape(str(node.get("process_id", "")))
-        role = html.escape(str(node.get("role", "")))
-        status = html.escape(str(node.get("status", "")))
-        state = html.escape(str(node.get("workflow_state", "")))
-        svg.append(
-            f'<g id="process-{process_id}"><rect class="node" x="{x}" y="{y}" width="190" height="70" rx="6"></rect>'
-            f'<text x="{x + 10}" y="{y + 22}">{process_id} ({role})</text>'
-            f'<text x="{x + 10}" y="{y + 44}">status: {status}</text>'
-            f'<text x="{x + 10}" y="{y + 62}">state: {state}</text></g>'
-        )
-    visible = set(visible_event_ids)
-    for edge in edges:
-        if edge.get("event_id") not in visible and edge.get("kind") != "spawn":
-            continue
-        from_node = by_id.get(str(edge.get("from")))
-        to_node = by_id.get(str(edge.get("to")))
-        if not from_node or not to_node:
-            continue
-        event_id = html.escape(str(edge.get("event_id", "")))
-        kind = html.escape(str(edge.get("kind", "")))
-        x1 = from_node["_x"] + 190
-        y1 = from_node["_y"] + 35
-        x2 = to_node["_x"]
-        y2 = to_node["_y"] + 35
-        svg.append(
-            f'<g id="edge-{event_id}"><line class="edge" x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}"></line>'
-            f'<circle class="marker" cx="{(x1 + x2) / 2:.1f}" cy="{(y1 + y2) / 2:.1f}" r="4"></circle>'
-            f'<text x="{(x1 + x2) / 2 + 8:.1f}" y="{(y1 + y2) / 2 - 6:.1f}">{kind}</text></g>'
-        )
-    svg.append("</svg>")
-    return "".join(svg)
-
-
-def _event_lanes_html(events: list[dict[str, Any]], current_index: int) -> str:
-    parts = []
-    for idx, event in enumerate(events):
-        event_type = html.escape(str(event.get("event_type", "")))
-        event_id = html.escape(str(event.get("event_id", "")))
-        opacity = ' style="opacity:0.35"' if idx > current_index else ""
-        parts.append(f'<button class="event" id="event-{event_id}"{opacity}>{idx} {event_type}</button>')
-    return "".join(parts)
 
 
 def _human_summary_html(comments: list[dict[str, Any]]) -> str:
@@ -194,27 +140,6 @@ def _observer_summary_html(interventions: list[dict[str, Any]]) -> str:
     ) + "</ul>"
 
 
-def _slide_article_html(slide: dict[str, Any], index: int, count: int) -> str:
-    snapshot = slide.get("snapshot", {})
-    process_map = _process_map_svg(snapshot.get("processes", []), slide.get("visible_edges", []), snapshot.get("visible_event_ids", []))
-    human_summary = _human_summary_html(slide.get("human_comments", []))
-    observer_summary = _observer_summary_html(slide.get("observer_interventions", []))
-    timeline = "".join(
-        f'<button class="{"active" if i == index else ""}" onclick="draw({i})">{i}</button>'
-        for i in range(count)
-    )
-    return (
-        f'<article id="current-slide" data-slide-index="{index}">'
-        f"<h2>{html.escape(str(slide.get('title', '')))}</h2>"
-        f"<p>Workflow state: <strong>{html.escape(str(snapshot.get('current_state', '')))}</strong></p>"
-        f'<div class="process-map">{process_map}</div>'
-        f"<h3>Human comments</h3>{human_summary}"
-        f"<h3>Observer interventions</h3>{observer_summary}"
-        f'<div class="timeline">{timeline}</div>'
-        "</article>"
-    )
-
-
 def _json_script_payload(data: dict[str, Any]) -> str:
     return (
         json.dumps(data, ensure_ascii=False)
@@ -224,13 +149,156 @@ def _json_script_payload(data: dict[str, Any]) -> str:
     )
 
 
+def _timeline_html(data: dict[str, Any]) -> str:
+    timeline = data["timeline"]
+    lanes = timeline.get("lanes", [])
+    markers = timeline.get("event_markers", [])
+    messages = timeline.get("messages", [])
+    lane_index = {lane["lane_id"]: idx for idx, lane in enumerate(lanes)}
+    label_width = 180
+    step = 96
+    lane_height = 68
+    event_count = max(1, len(data.get("events", [])))
+    width = max(860, label_width + event_count * step + 80)
+    height = 28 + max(1, len(lanes)) * lane_height
+    marker_by_lane: dict[str, list[dict[str, Any]]] = {}
+    for marker in markers:
+        marker_by_lane.setdefault(marker["lane_id"], []).append(marker)
+    parts = [
+        f'<div class="perfetto-timeline" id="timeline"><div class="timeline-canvas" style="width:{width}px;height:{height}px">',
+        '<div class="timeline-axis">',
+    ]
+    for idx in range(event_count):
+        x = label_width + idx * step + 8
+        parts.append(f'<span class="tick" style="left:{x}px">#{idx}</span>')
+    parts.append("</div>")
+    parts.append(_message_layer_svg(messages, lane_index, label_width, step, lane_height, width, height - 28))
+    for row, lane in enumerate(lanes):
+        top = 28 + row * lane_height
+        lane_id = html.escape(str(lane["lane_id"]))
+        label = html.escape(str(lane.get("label", lane["lane_id"])))
+        role = html.escape(str(lane.get("role", lane.get("kind", ""))))
+        parts.append(f'<div class="timeline-lane" id="{lane_id}" style="top:{top}px;width:{width}px">')
+        parts.append(f'<div class="timeline-lane-label">{label}<span class="lane-role">{role}</span></div><div class="lane-track"></div>')
+        for segment in lane.get("state_segments", []):
+            left = label_width + int(segment["start_index"]) * step + 8
+            seg_width = max(42, (int(segment["end_index"]) - int(segment["start_index"]) + 1) * step - 12)
+            state = html.escape(str(segment.get("state", "")))
+            status = html.escape(str(segment.get("status", "")))
+            segment_id = html.escape(str(segment["segment_id"]))
+            parts.append(
+                f'<button class="timeline-state-segment status-{status}" id="{segment_id}" '
+                f'data-segment-id="{segment_id}" style="left:{left}px;width:{seg_width}px" '
+                f'title="{state} / {status}">{state}</button>'
+            )
+        for marker in marker_by_lane.get(lane["lane_id"], []):
+            left = label_width + int(marker["event_index"]) * step + 42
+            event_id = html.escape(str(marker["event_id"]))
+            label_text = html.escape(str(marker.get("label", marker.get("event_type", ""))))
+            kind = _marker_class(marker)
+            parts.append(
+                f'<button class="timeline-event-marker {kind}" id="event-{event_id}" data-event-id="{event_id}" '
+                f'style="left:{left}px" title="{label_text}">{label_text}</button>'
+            )
+        parts.append("</div>")
+    parts.append("</div></div>")
+    return "".join(parts)
+
+
+def _message_layer_svg(
+    messages: list[dict[str, Any]],
+    lane_index: dict[str, int],
+    label_width: int,
+    step: int,
+    lane_height: int,
+    width: int,
+    height: int,
+) -> str:
+    parts = [
+        f'<svg class="timeline-message-layer" width="{width}" height="{height}" viewBox="0 0 {width} {height}" aria-label="timeline message links">',
+        '<defs><marker id="timeline-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#8b5e34"/></marker></defs>',
+    ]
+    for message in messages:
+        from_row = lane_index.get(message.get("from_lane_id", ""))
+        to_row = lane_index.get(message.get("to_lane_id", ""))
+        if from_row is None or to_row is None:
+            continue
+        x1 = label_width + int(message.get("event_index", 0)) * step + 51
+        x2 = x1 + 34
+        y1 = from_row * lane_height + 52
+        y2 = to_row * lane_height + 52
+        if from_row == to_row:
+            y_mid = max(12, y1 - 20)
+            path = f"M{x1},{y1} C{x1 + 28},{y_mid} {x2 - 28},{y_mid} {x2},{y2}"
+            label_x = x1 + 10
+            label_y = y_mid - 4
+        else:
+            mid = (x1 + x2) / 2
+            path = f"M{x1},{y1} C{mid},{y1} {mid},{y2} {x2},{y2}"
+            label_x = mid + 4
+            label_y = (y1 + y2) / 2 - 4
+        message_id = html.escape(str(message["message_id"]))
+        label = html.escape(str(message.get("kind", "message")))
+        parts.append(
+            f'<path class="timeline-message-link" id="{message_id}" data-message-id="{message_id}" d="{path}"></path>'
+            f'<text class="timeline-message-label" x="{label_x:.1f}" y="{label_y:.1f}">{label}</text>'
+        )
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def _workflow_diagram_svg(workflow: dict[str, Any], selected_state: str) -> str:
+    states = [dict(state) for state in workflow.get("states", [])]
+    transitions = workflow.get("transitions", [])
+    allowed = set(workflow.get("allowed_next", []))
+    completed = set(workflow.get("completed_states", []))
+    width = max(340, len(states) * 132 + 32)
+    parts = [
+        f'<svg viewBox="0 0 {width} 180" role="img" aria-label="state transition diagram">',
+        '<defs><marker id="workflow-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#1d4f8f"/></marker></defs>',
+    ]
+    by_id: dict[str, dict[str, Any]] = {}
+    for idx, state in enumerate(states):
+        state["_x"] = 18 + idx * 132
+        state["_y"] = 56
+        by_id[str(state["id"])] = state
+    for transition in transitions:
+        from_state = by_id.get(str(transition.get("from")))
+        to_state = by_id.get(str(transition.get("to")))
+        if not from_state or not to_state:
+            continue
+        cls = "workflow-edge allowed" if transition.get("from") == selected_state and transition.get("to") in allowed else "workflow-edge"
+        parts.append(
+            f'<line class="{cls}" x1="{from_state["_x"] + 104}" y1="{from_state["_y"] + 22}" '
+            f'x2="{to_state["_x"]}" y2="{to_state["_y"] + 22}"></line>'
+        )
+    for state in states:
+        state_id = str(state["id"])
+        cls = "workflow-node selected" if state_id == selected_state else "workflow-node completed" if state_id in completed else "workflow-node"
+        label = html.escape(state_id)
+        parts.append(
+            f'<rect class="{cls}" x="{state["_x"]}" y="{state["_y"]}" width="104" height="44" rx="5"></rect>'
+            f'<text x="{state["_x"] + 8}" y="{state["_y"] + 26}">{label}</text>'
+        )
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def _marker_class(marker: dict[str, Any]) -> str:
+    if marker.get("ledger") == "human":
+        return "human"
+    if marker.get("ledger") == "observer-events" or str(marker.get("event_type", "")).startswith("intervention"):
+        return "observer"
+    if marker.get("ledger") == "transitions":
+        return "transition"
+    return "event"
+
+
 def render_html(data: dict[str, Any]) -> str:
     payload = _json_script_payload(data)
-    last_index = max(0, len(data["events"]) - 1)
-    snapshot = data["snapshots"][last_index] if data["snapshots"] else {"processes": [], "visible_event_ids": [], "current_state": data["current_state"]}
-    static_graph = _process_map_svg(snapshot.get("processes", data["processes"]), data["communication_edges"], snapshot.get("visible_event_ids", []))
-    static_lanes = _event_lanes_html(data["events"], last_index)
-    static_inspector = html.escape(json.dumps(data["events"][last_index] if data["events"] else data, indent=2, ensure_ascii=False))
+    static_timeline = _timeline_html(data)
+    static_diagram = _workflow_diagram_svg(data["timeline"]["workflow"], str(data.get("current_state", "")))
+    static_inspector = html.escape(json.dumps(data["events"][-1] if data["events"] else data, indent=2, ensure_ascii=False))
     human_summary = _human_summary_html(data.get("human_comments", []))
     observer_summary = _observer_summary_html(data.get("observer_interventions", []))
     return f"""<!doctype html>
@@ -238,188 +306,139 @@ def render_html(data: dict[str, Any]) -> str:
 <meta charset="utf-8">
 <title>Long-Horizon Progress</title>
 <style>
-body {{ font-family: system-ui, sans-serif; margin: 0; color: #17202a; background: #f7f7f4; }}
-header {{ padding: 16px 20px; background: #16324f; color: white; }}
-main {{ display: grid; grid-template-columns: 2fr 1fr; gap: 16px; padding: 16px; }}
-section {{ background: white; border: 1px solid #d8d8d2; border-radius: 6px; padding: 12px; }}
-#graph svg {{ width: 100%; min-height: 300px; }}
-.lane {{ display: flex; flex-wrap: wrap; gap: 6px; }}
-.event {{ border: 1px solid #c8c8c0; padding: 4px 6px; border-radius: 4px; background: #fbfbf8; cursor: pointer; }}
-.node {{ fill: #fdfdfb; stroke: #365f7d; stroke-width: 1.5; }}
-.edge {{ stroke: #8b6f47; stroke-width: 1.5; marker-end: url(#arrow); }}
-.marker {{ fill: #c2410c; }}
-pre {{ white-space: pre-wrap; }}
+body {{ font-family: system-ui, sans-serif; margin: 0; color: #17202a; background: #f5f6f2; }}
+header {{ padding: 16px 20px; background: #1f3a3d; color: white; }}
+main {{ display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; padding: 16px; }}
+section, aside {{ background: white; border: 1px solid #d8d8d2; border-radius: 6px; padding: 12px; }}
+h2 {{ font-size: 16px; margin: 0 0 10px; }}
+pre {{ white-space: pre-wrap; font-size: 12px; }}
+.perfetto-timeline {{ overflow-x: auto; border: 1px solid #cfcfc8; border-radius: 6px; background: #fbfbf8; }}
+.timeline-canvas {{ position: relative; min-height: 180px; }}
+.timeline-axis {{ position: sticky; top: 0; height: 28px; background: #f1f2ee; border-bottom: 1px solid #d8d8d2; z-index: 4; }}
+.tick {{ position: absolute; top: 5px; font-size: 11px; color: #69706b; }}
+.timeline-lane {{ position: absolute; left: 0; height: 68px; border-bottom: 1px solid #e1e1dc; }}
+.timeline-lane-label {{ position: absolute; left: 0; top: 0; bottom: 0; width: 180px; padding: 10px 8px; box-sizing: border-box; background: #ffffff; border-right: 1px solid #d8d8d2; z-index: 3; }}
+.lane-role {{ display: block; font-size: 11px; color: #68736f; }}
+.lane-track {{ position: absolute; left: 180px; right: 0; top: 0; bottom: 0; background: linear-gradient(90deg, rgba(31,58,61,0.08) 1px, transparent 1px); background-size: 96px 100%; }}
+.timeline-state-segment {{ position: absolute; top: 10px; height: 24px; border: 1px solid #6a8d73; background: #dcebdd; border-radius: 4px; padding: 0 8px; font-size: 12px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; color: #193328; }}
+.timeline-state-segment.status-interrupted {{ border-color: #b45309; background: #fde5c0; }}
+.timeline-state-segment.status-completed {{ border-color: #4f7a8a; background: #d8ebf0; }}
+.timeline-event-marker {{ position: absolute; top: 42px; width: 18px; height: 18px; transform: rotate(45deg); border: 1px solid #324c64; background: #edf3f8; cursor: pointer; text-indent: -999px; overflow: hidden; }}
+.timeline-event-marker.observer {{ background: #fff0cc; border-color: #9a6b16; }}
+.timeline-event-marker.human {{ background: #f4e5ff; border-color: #6b4c8a; }}
+.timeline-event-marker.transition {{ background: #dbeafe; border-color: #315f9d; }}
+.timeline-message-layer {{ position: absolute; left: 0; top: 28px; pointer-events: none; z-index: 2; }}
+.timeline-message-link {{ fill: none; stroke: #8b5e34; stroke-width: 1.8; marker-end: url(#timeline-arrow); pointer-events: auto; cursor: pointer; }}
+.timeline-message-label {{ fill: #5c4934; font-size: 11px; pointer-events: none; }}
+.details-panel {{ min-height: 220px; }}
+.state-transition-diagram svg {{ width: 100%; min-height: 170px; }}
+.workflow-node {{ fill: #fdfdfb; stroke: #65756e; stroke-width: 1.2; }}
+.workflow-node.selected {{ fill: #dbeafe; stroke: #1d4f8f; stroke-width: 2; }}
+.workflow-node.completed {{ fill: #dcebdd; }}
+.workflow-edge {{ stroke: #9a9a91; stroke-width: 1.3; marker-end: url(#workflow-arrow); }}
+.workflow-edge.allowed {{ stroke: #1d4f8f; stroke-width: 2.2; }}
+.summary-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }}
 </style>
 <header><h1>Long-Horizon Progress</h1><div>Goal {html.escape(data['goal_id'])} / Run {html.escape(data['run_id'])}</div></header>
 <main>
   <section>
-    <label>Event sequence <input id="slider" type="range" min="0" max="{max(0, len(data['events']) - 1)}" value="{max(0, len(data['events']) - 1)}"></label>
-    <p><a href="slides.html">Open timeline slides</a></p>
-    <p>Current state: <strong id="current-state">{html.escape(str(data['current_state']))}</strong></p>
-    <div id="graph">{static_graph}</div>
-    <h2>Event Lanes</h2>
-    <div id="lanes" class="lane">{static_lanes}</div>
-    <h2>Human Comments</h2>
-    <div id="human-comments">{human_summary}</div>
-    <h2>Observer Interventions</h2>
-    <div id="observer-interventions">{observer_summary}</div>
+    <h2>Execution Timeline</h2>
+    {static_timeline}
+    <div class="summary-grid">
+      <section>
+        <h2>Human Comments</h2>
+        <div id="human-comments">{human_summary}</div>
+      </section>
+      <section>
+        <h2>Observer Interventions</h2>
+        <div id="observer-interventions">{observer_summary}</div>
+      </section>
+    </div>
   </section>
-  <section>
-    <h2>Inspector</h2>
-    <pre id="inspector">{static_inspector}</pre>
-  </section>
+  <aside>
+    <h2>Selected Details</h2>
+    <div class="state-transition-diagram" id="state-transition-diagram">{static_diagram}</div>
+    <div class="details-panel"><pre id="inspector">{static_inspector}</pre></div>
+  </aside>
 </main>
 <script id="report-data" type="application/json">{payload}</script>
 <script>
 const data = JSON.parse(document.getElementById('report-data').textContent);
-const slider = document.getElementById('slider');
-const graph = document.getElementById('graph');
-const lanes = document.getElementById('lanes');
 const inspector = document.getElementById('inspector');
-function draw(idx) {{
-  const snapshot = data.snapshots[idx] || data.snapshots[data.snapshots.length - 1] || {{}};
-  const events = data.events.slice(0, idx + 1);
-  const nodes = data.processes;
-  const width = 760, height = Math.max(280, nodes.length * 90 + 80);
-  let svg = `<svg viewBox="0 0 ${{width}} ${{height}}" role="img"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#8b6f47"/></marker></defs>`;
-  nodes.forEach((n, i) => {{
-    const x = 40 + (i % 3) * 230, y = 40 + Math.floor(i / 3) * 110;
-    n._x = x; n._y = y;
-    svg += `<a id="process-${{n.process_id}}"><rect class="node" x="${{x}}" y="${{y}}" width="190" height="70" rx="6"></rect><text x="${{x+10}}" y="${{y+22}}">${{n.process_id}} (${{n.role}})</text><text x="${{x+10}}" y="${{y+44}}">status: ${{n.status}}</text><text x="${{x+10}}" y="${{y+62}}">state: ${{n.workflow_state}}</text></a>`;
-  }});
-  data.communication_edges.forEach(e => {{
-    const from = nodes.find(n => n.process_id === e.from), to = nodes.find(n => n.process_id === e.to);
-    if (from && to && events.find(ev => ev.event_id === e.event_id)) {{
-      svg += `<a id="edge-${{e.event_id}}"><line class="edge" x1="${{from._x+190}}" y1="${{from._y+35}}" x2="${{to._x}}" y2="${{to._y+35}}"></line><circle class="marker" cx="${{(from._x+to._x+190)/2}}" cy="${{(from._y+to._y+70)/2}}" r="4"></circle></a>`;
+const diagram = document.getElementById('state-transition-diagram');
+function inspect(kind, id) {{
+  let obj = null;
+  if (kind === 'event') obj = data.events.find(event => event.event_id === id);
+  if (kind === 'message') obj = data.timeline.messages.find(message => message.message_id === id);
+  if (kind === 'segment') {{
+    for (const lane of data.timeline.lanes) {{
+      obj = lane.state_segments.find(segment => segment.segment_id === id);
+      if (obj) break;
     }}
-  }});
-  svg += `</svg>`;
-  graph.innerHTML = svg;
-  document.getElementById('current-state').textContent = snapshot.current_state || data.current_state || '';
-  lanes.innerHTML = "";
-  data.events.forEach((e, i) => {{
-    const div = document.createElement('button');
-    div.className = 'event';
-    div.id = `event-${{e.event_id}}`;
-    div.textContent = `${{i}} ${{e.event_type}}`;
-    div.onclick = () => inspect(e);
-    if (i > idx) div.style.opacity = "0.35";
-    lanes.appendChild(div);
-  }});
-  inspect(data.events[idx] || data);
+    if (obj) diagram.innerHTML = workflowDiagram(obj.state);
+  }}
+  inspector.textContent = JSON.stringify(obj || data, null, 2);
 }}
-function inspect(obj) {{ inspector.textContent = JSON.stringify(obj, null, 2); }}
-slider.oninput = () => draw(Number(slider.value));
-draw(Number(slider.value));
+function workflowDiagram(selected) {{
+  const workflow = data.timeline.workflow || {{states: [], transitions: [], allowed_next: []}};
+  const states = workflow.states || [];
+  const transitions = workflow.transitions || [];
+  const allowed = new Set(workflow.allowed_next || []);
+  const width = Math.max(340, states.length * 132 + 32);
+  let svg = `<svg viewBox="0 0 ${{width}} 180" role="img" aria-label="state transition diagram"><defs><marker id="workflow-arrow-js" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#1d4f8f"/></marker></defs>`;
+  states.forEach((state, idx) => {{
+    state._x = 18 + idx * 132; state._y = 56;
+  }});
+  transitions.forEach(t => {{
+    const from = states.find(state => state.id === t.from), to = states.find(state => state.id === t.to);
+    if (!from || !to) return;
+    const cls = t.from === selected && allowed.has(t.to) ? 'workflow-edge allowed' : 'workflow-edge';
+    svg += `<line class="${{cls}}" x1="${{from._x + 104}}" y1="${{from._y + 22}}" x2="${{to._x}}" y2="${{to._y + 22}}"></line>`;
+  }});
+  states.forEach(state => {{
+    const cls = state.id === selected ? 'workflow-node selected' : 'workflow-node';
+    svg += `<rect class="${{cls}}" x="${{state._x}}" y="${{state._y}}" width="104" height="44" rx="5"></rect><text x="${{state._x + 8}}" y="${{state._y + 26}}">${{state.id}}</text>`;
+  }});
+  return svg + '</svg>';
+}}
+document.querySelectorAll('.timeline-event-marker').forEach(el => el.addEventListener('click', () => inspect('event', el.dataset.eventId)));
+document.querySelectorAll('.timeline-state-segment').forEach(el => el.addEventListener('click', () => inspect('segment', el.dataset.segmentId)));
+document.querySelectorAll('.timeline-message-link').forEach(el => el.addEventListener('click', () => inspect('message', el.dataset.messageId)));
 </script>
 </html>
 """
 
 
 def build_slides_data(data: dict[str, Any]) -> dict[str, Any]:
-    slides = []
-    for idx, snapshot in enumerate(data["snapshots"]):
-        event = data["events"][idx] if idx < len(data["events"]) else {}
-        slides.append(
-            {
-                "index": idx,
-                "title": f"{idx}: {event.get('event_type', 'initial')}",
-                "event": event,
-                "snapshot": snapshot,
-                "visible_edges": [
-                    edge
-                    for edge in data["communication_edges"]
-                    if edge.get("event_id") in snapshot.get("visible_event_ids", []) or edge.get("kind") == "spawn"
-                ],
-                "human_comments": [
-                    comment for comment in data["human_comments"] if comment.get("event_id") in snapshot.get("visible_event_ids", [])
-                ],
-                "observer_interventions": [
-                    item for item in data["observer_interventions"] if item.get("event_id") in snapshot.get("visible_event_ids", [])
-                ],
-            }
-        )
     return {
         "goal_id": data["goal_id"],
         "run_id": data["run_id"],
-        "timeline": {"axis": data["playback"]["axis"], "count": len(slides)},
-        "processes": data["processes"],
-        "slides": slides,
+        "canonical_view": "progress.html",
+        "timeline_ref": "report-data.json#timeline",
+        "compatibility": "slides view has been folded into the canonical progress timeline",
     }
 
 
 def render_slides_html(slides_data: dict[str, Any]) -> str:
     payload = _json_script_payload(slides_data)
-    slide_count = len(slides_data.get("slides", []))
-    current_index = max(0, slide_count - 1)
-    current_slide = slides_data.get("slides", [])[current_index] if slide_count else {"event": {}, "snapshot": {}, "visible_edges": [], "human_comments": [], "observer_interventions": [], "title": "No events"}
-    static_slide = _slide_article_html(current_slide, current_index, slide_count)
-    static_inspector = html.escape(json.dumps(current_slide, indent=2, ensure_ascii=False))
     return f"""<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<title>Long-Horizon Timeline Slides</title>
+<meta http-equiv="refresh" content="0; url=progress.html">
+<title>Long-Horizon Timeline Compatibility</title>
 <style>
-body {{ margin: 0; font-family: system-ui, sans-serif; color: #15202b; background: #f6f6f3; }}
-header {{ padding: 14px 18px; background: #213547; color: white; display: flex; justify-content: space-between; gap: 16px; align-items: center; }}
-main {{ padding: 16px; display: grid; grid-template-columns: 1fr 320px; gap: 16px; }}
-.slide {{ background: white; border: 1px solid #d2d2cb; border-radius: 6px; padding: 14px; min-height: 520px; }}
-.timeline {{ display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }}
-.timeline button {{ border: 1px solid #b8b8b0; background: #fbfbf9; border-radius: 4px; padding: 4px 7px; cursor: pointer; }}
-.timeline button.active {{ background: #2f6f73; color: white; }}
-.process-map svg {{ width: 100%; min-height: 330px; }}
-.node {{ fill: #fdfdfb; stroke: #315f72; stroke-width: 1.5; }}
-.edge {{ stroke: #9a6b38; stroke-width: 1.5; marker-end: url(#arrow); }}
-aside {{ background: white; border: 1px solid #d2d2cb; border-radius: 6px; padding: 12px; }}
-pre {{ white-space: pre-wrap; font-size: 12px; }}
+body {{ margin: 0; font-family: system-ui, sans-serif; color: #17202a; background: #f5f6f2; }}
+main {{ margin: 40px auto; max-width: 720px; background: white; border: 1px solid #d8d8d2; border-radius: 6px; padding: 18px; }}
+a {{ color: #1d4f8f; }}
+pre {{ white-space: pre-wrap; background: #f7f7f4; padding: 10px; border-radius: 4px; }}
 </style>
-<header><h1>Timeline Slides</h1><div>Goal {html.escape(slides_data['goal_id'])} / Run {html.escape(slides_data['run_id'])}</div></header>
 <main>
-  <section class="slide" id="slide">{static_slide}</section>
-  <aside>
-    <h2>Inspector</h2>
-    <pre id="inspector">{static_inspector}</pre>
-  </aside>
+  <h1>Timeline Compatibility</h1>
+  <p>The slide view has been folded into the canonical timeline report.</p>
+  <p><a href="progress.html">Open the canonical timeline report</a>.</p>
+  <pre>{html.escape(json.dumps(slides_data, indent=2, ensure_ascii=False))}</pre>
 </main>
 <script id="slides-data" type="application/json">{payload}</script>
-<script>
-const data = JSON.parse(document.getElementById('slides-data').textContent);
-const slideEl = document.getElementById('slide');
-const inspector = document.getElementById('inspector');
-let index = Math.max(0, data.slides.length - 1);
-function processMap(slide) {{
-  const nodes = slide.snapshot.processes || [];
-  const edges = slide.visible_edges || [];
-  let svg = '<svg viewBox="0 0 760 420" role="img"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#9a6b38"/></marker></defs>';
-  nodes.forEach((n, i) => {{
-    n._x = 40 + (i % 3) * 235; n._y = 42 + Math.floor(i / 3) * 112;
-    svg += `<rect class="node" x="${{n._x}}" y="${{n._y}}" width="195" height="74" rx="6"></rect>`;
-    svg += `<text x="${{n._x + 10}}" y="${{n._y + 24}}">${{n.process_id}} (${{n.role}})</text>`;
-    svg += `<text x="${{n._x + 10}}" y="${{n._y + 46}}">status: ${{n.status}}</text>`;
-    svg += `<text x="${{n._x + 10}}" y="${{n._y + 64}}">state: ${{n.workflow_state}}</text>`;
-  }});
-  edges.forEach(e => {{
-    const from = nodes.find(n => n.process_id === e.from), to = nodes.find(n => n.process_id === e.to);
-    if (from && to) svg += `<line class="edge" x1="${{from._x+195}}" y1="${{from._y+37}}" x2="${{to._x}}" y2="${{to._y+37}}"></line>`;
-  }});
-  return svg + '</svg>';
-}}
-function draw(i) {{
-  index = i;
-  const slide = data.slides[index] || {{event: {{}}, snapshot: {{}}}};
-  slideEl.innerHTML = `<article id="current-slide" data-slide-index="${{index}}"><h2>${{slide.title}}</h2><p>Workflow state: <strong>${{slide.snapshot.current_state || ''}}</strong></p><div class="process-map">${{processMap(slide)}}</div><h3>Human comments</h3><p>${{slide.human_comments.length}}</p><h3>Observer interventions</h3><p>${{slide.observer_interventions.length}}</p><div class="timeline">${{timeline()}}</div></article>`;
-  inspector.textContent = JSON.stringify(slide, null, 2);
-  document.querySelectorAll('.timeline button').forEach((button, idx) => button.classList.toggle('active', idx === index));
-}}
-function timeline() {{
-  return data.slides.map((slide, i) => `<button onclick="draw(${{i}})">${{i}}</button>`).join('');
-}}
-document.addEventListener('keydown', event => {{
-  if (event.key === 'ArrowRight') draw(Math.min(data.slides.length - 1, index + 1));
-  if (event.key === 'ArrowLeft') draw(Math.max(0, index - 1));
-}});
-draw(index);
-</script>
 </html>
 """
 
@@ -493,6 +512,245 @@ def _snapshot_at(events: list[dict[str, Any]], processes: list[dict[str, Any]], 
         "processes": list(process_status.values()),
         "visible_event_ids": [e["event_id"] for e in events],
     }
+
+
+def _workflow_projection(flow: dict[str, Any], board: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
+    states = [{"id": str(state.get("id", "")), "kind": state.get("kind", "")} for state in flow.get("states", [])]
+    if not states and board.get("current_state"):
+        states = [{"id": str(board["current_state"]), "kind": "state"}]
+    transitions = [
+        {
+            "from": str(transition.get("from", "")),
+            "to": str(transition.get("to", "")),
+            "requires_human": bool(transition.get("requires_human", False)),
+            "human_gate": transition.get("human_gate", ""),
+        }
+        for transition in flow.get("transitions", [])
+    ]
+    completed: list[str] = []
+    for event in events:
+        if event.get("event_type") == "transition_applied":
+            from_state = event.get("payload", {}).get("from")
+            if from_state and from_state not in completed:
+                completed.append(str(from_state))
+    return {
+        "flow_id": flow.get("flow", {}).get("id", ""),
+        "initial_state": flow.get("flow", {}).get("initial_state", ""),
+        "current_state": board.get("current_state", ""),
+        "allowed_next": board.get("allowed_next", allowed_next(flow, board.get("current_state", ""))),
+        "terminal_states": flow.get("flow", {}).get("terminal_states", []),
+        "states": states,
+        "transitions": transitions,
+        "completed_states": completed,
+    }
+
+
+def _timeline_projection(
+    events: list[dict[str, Any]],
+    processes: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+    snapshots: list[dict[str, Any]],
+    workflow: dict[str, Any],
+) -> dict[str, Any]:
+    process_ids = {str(process.get("process_id")) for process in processes}
+    lanes = []
+    for process in _ordered_processes(processes):
+        lane_id = f"process:{process['process_id']}"
+        lanes.append(
+            {
+                "lane_id": lane_id,
+                "kind": "process",
+                "label": str(process.get("process_id", "")),
+                "role": str(process.get("role", "")),
+                "process_id": str(process.get("process_id", "")),
+                "parent_process_id": str(process.get("parent_process_id", "")),
+                "state_segments": _state_segments_for_process(process, snapshots, lane_id, events),
+            }
+        )
+    event_markers = []
+    for event in events:
+        lane_id = _event_lane_id(event, process_ids)
+        if not any(lane["lane_id"] == lane_id for lane in lanes):
+            lanes.append({"lane_id": lane_id, "kind": "system", "label": _lane_label(lane_id), "role": "event channel", "state_segments": []})
+        event_markers.append(
+            {
+                "event_id": event["event_id"],
+                "event_index": event.get("event_index", 0),
+                "event_type": event.get("event_type", ""),
+                "ledger": event.get("ledger", ""),
+                "lane_id": lane_id,
+                "label": f"{event.get('event_index', 0)} {event.get('event_type', '')}",
+                "anchor": f"#event-{event['event_id']}",
+            }
+        )
+    messages = _timeline_messages(events, edges, process_ids)
+    return {"axis": "event_sequence", "workflow": workflow, "lanes": lanes, "event_markers": event_markers, "messages": messages}
+
+
+def _ordered_processes(processes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(processes, key=lambda p: (0 if p.get("process_id") == "primary" else 1, str(p.get("parent_process_id", "")), str(p.get("process_id", ""))))
+
+
+def _state_segments_for_process(
+    process: dict[str, Any],
+    snapshots: list[dict[str, Any]],
+    lane_id: str,
+    events: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    process_id = str(process.get("process_id", ""))
+    if not snapshots:
+        return [
+            {
+                "segment_id": f"state-{process_id}-0",
+                "lane_id": lane_id,
+                "process_id": process_id,
+                "state": process.get("workflow_state", ""),
+                "status": process.get("status", ""),
+                "start_index": 0,
+                "end_index": 0,
+                "anchor": "#state-at-0",
+            }
+        ]
+    segments: list[dict[str, Any]] = []
+    current_state = None
+    current_status = None
+    start_index = 0
+    for snapshot in snapshots:
+        projected = next((item for item in snapshot.get("processes", []) if str(item.get("process_id")) == process_id), process)
+        state = str(projected.get("workflow_state", snapshot.get("current_state", "")))
+        status = str(projected.get("status", process.get("status", "")))
+        idx = int(snapshot.get("event_index", 0))
+        if current_state is None:
+            current_state = state
+            current_status = status
+            start_index = idx
+            continue
+        if state != current_state or status != current_status:
+            segments.append(_state_segment(process_id, lane_id, current_state, current_status or "", start_index, idx - 1, events))
+            current_state = state
+            current_status = status
+            start_index = idx
+    end_index = int(snapshots[-1].get("event_index", 0))
+    segments.append(_state_segment(process_id, lane_id, current_state or "", current_status or "", start_index, end_index, events))
+    return segments
+
+
+def _state_segment(
+    process_id: str,
+    lane_id: str,
+    state: str,
+    status: str,
+    start_index: int,
+    end_index: int,
+    events: list[dict[str, Any]],
+) -> dict[str, Any]:
+    safe_state = str(state).replace(" ", "-")
+    return {
+        "segment_id": f"state-{process_id}-{start_index}-{end_index}-{safe_state}",
+        "lane_id": lane_id,
+        "process_id": process_id,
+        "state": state,
+        "status": status,
+        "start_index": start_index,
+        "end_index": max(start_index, end_index),
+        "start_event_id": events[start_index]["event_id"] if events and start_index < len(events) else "",
+        "end_event_id": events[end_index]["event_id"] if events and end_index < len(events) else "",
+        "anchor": f"#state-at-{start_index}",
+    }
+
+
+def _event_lane_id(event: dict[str, Any], process_ids: set[str]) -> str:
+    process_id = str(event.get("process_id", ""))
+    if process_id in process_ids:
+        return f"process:{process_id}"
+    ledger = event.get("ledger", "")
+    if ledger == "human":
+        return "human"
+    if ledger == "notifications":
+        return "system:notifications"
+    if ledger == "reporter-annotations":
+        return "system:reporter"
+    return f"system:{ledger or 'events'}"
+
+
+def _lane_label(lane_id: str) -> str:
+    if lane_id == "human":
+        return "human"
+    if lane_id.startswith("system:"):
+        return lane_id.split(":", 1)[1]
+    return lane_id
+
+
+def _timeline_messages(events: list[dict[str, Any]], edges: list[dict[str, Any]], process_ids: set[str]) -> list[dict[str, Any]]:
+    by_event = {event["event_id"]: event for event in events}
+    messages = []
+    for edge in edges:
+        from_id = str(edge.get("from", ""))
+        to_id = str(edge.get("to", ""))
+        if from_id not in process_ids or to_id not in process_ids:
+            continue
+        event = by_event.get(str(edge.get("event_id")))
+        event_index = int(event.get("event_index", 0)) if event else 0
+        event_id = str(edge.get("event_id", f"{from_id}-{to_id}-{event_index}"))
+        messages.append(
+            {
+                "message_id": f"message-{event_id}-{len(messages)}",
+                "kind": edge.get("kind", "message"),
+                "event_id": event_id,
+                "event_index": event_index,
+                "from_lane_id": f"process:{from_id}",
+                "to_lane_id": f"process:{to_id}",
+                "label": edge.get("kind", "message"),
+                "anchor": f"#edge-{event_id}",
+            }
+        )
+    for event in events:
+        if event.get("event_type") != "human_comment":
+            continue
+        targets = _target_process_lanes(event.get("payload", {}).get("target_refs", []), process_ids)
+        for target_lane in targets or ["human"]:
+            messages.append(
+                {
+                    "message_id": f"message-{event['event_id']}-{len(messages)}",
+                    "kind": "human_comment",
+                    "event_id": event["event_id"],
+                    "event_index": event.get("event_index", 0),
+                    "from_lane_id": "human",
+                    "to_lane_id": target_lane,
+                    "label": "human_comment",
+                    "anchor": f"#event-{event['event_id']}",
+                }
+            )
+    return messages
+
+
+def _target_process_lanes(target_refs: list[str], process_ids: set[str]) -> list[str]:
+    lanes = []
+    for ref in target_refs:
+        if ref.startswith("#process-"):
+            process_id = ref.removeprefix("#process-")
+            if process_id in process_ids:
+                lanes.append(f"process:{process_id}")
+    return lanes
+
+
+def _timeline_anchors(timeline: dict[str, Any]) -> list[str]:
+    anchors = []
+    for lane in timeline.get("lanes", []):
+        anchors.extend(str(segment.get("anchor", "")) for segment in lane.get("state_segments", []))
+    anchors.extend(f"#{message['message_id']}" for message in timeline.get("messages", []))
+    return [anchor for anchor in anchors if anchor]
+
+
+def _unique_anchors(anchors: list[str]) -> list[str]:
+    seen = set()
+    unique = []
+    for anchor in anchors:
+        if anchor in seen:
+            continue
+        seen.add(anchor)
+        unique.append(anchor)
+    return unique
 
 
 def _anchors(events: list[dict[str, Any]], processes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> list[str]:

@@ -19,7 +19,7 @@ The demo follows a Humanize v1-style loop:
 6. Parent selects the shortest passing candidate.
 7. Parent merges the selected child branch.
 8. Final human acceptance gate.
-9. Report and slide artifacts are generated for human inspection.
+9. The canonical timeline report is generated for human inspection.
 
 ## Run
 
@@ -60,7 +60,6 @@ Open these generated files in the parent worktree:
 
 ```text
 ../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/reports/progress.html
-../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/reports/slides.html
 ../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/reports/report-data.json
 ../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/artifacts/selection/selected-candidate.json
 ../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/artifacts/process-merges/

@@ -40,29 +40,35 @@ class ReportServerGitGithubSystemTests(unittest.TestCase):
         create_run(root, "goal-st", "run-1")
         return root, "goal-st", "run-1"
 
-    def test_report_generate_writes_slides_and_server_imports_pushed_human_comment(self):
+    def test_report_generate_writes_timeline_and_server_imports_pushed_human_comment(self):
         root, goal_id, run_id = self.make_git_run()
         create_process(root, goal_id, run_id, "child-a", role="task", parent_process_id="primary")
         append_event(root, goal_id, run_id, "commands", "check_result", {"check_id": "seed", "status": "passed"})
         data = generate_report(root, goal_id, run_id)
         reports = run_dir(root, goal_id, run_id) / "reports"
+        self.assertTrue((reports / "progress.html").exists())
+        self.assertIn("timeline", data)
+        self.assertTrue(any(lane["lane_id"] == "process:child-a" for lane in data["timeline"]["lanes"]))
+        self.assertTrue(any(message["kind"] == "spawn" and message["to_lane_id"] == "process:child-a" for message in data["timeline"]["messages"]))
+        self.assertTrue(any(marker["event_type"] == "check_result" for marker in data["timeline"]["event_markers"]))
         self.assertTrue((reports / "slides.html").exists())
         self.assertTrue((reports / "slides-data.json").exists())
         slides = read_json(reports / "slides-data.json")
-        self.assertEqual(len(slides["slides"]), len(data["events"]))
+        self.assertEqual(slides["canonical_view"], "progress.html")
         slides_html = (reports / "slides.html").read_text(encoding="utf-8")
-        self.assertIn('<article id="current-slide"', slides_html)
-        self.assertIn("<svg", slides_html)
-        self.assertIn("child-a", slides_html)
-        self.assertIn('<script id="slides-data" type="application/json">{"goal_id"', slides_html)
-        self.assertIn("timeline", slides_html)
-        self.assertIn("process-map", slides_html)
+        self.assertIn("canonical timeline report", slides_html)
+        self.assertIn("progress.html", slides_html)
+        self.assertNotIn('<article id="current-slide"', slides_html)
+        self.assertNotIn("process-map", slides_html)
 
         with ReportServer(root, goal_id, run_id, host="127.0.0.1", port=0) as server:
             base = server.url
             html = request.urlopen(f"{base}/progress.html", timeout=5).read().decode("utf-8")
-            self.assertIn("Event sequence", html)
-            self.assertIn("<svg", html)
+            self.assertIn("perfetto-timeline", html)
+            self.assertIn("timeline-state-segment", html)
+            self.assertIn("timeline-event-marker", html)
+            self.assertIn("timeline-message-link", html)
+            self.assertIn("state-transition-diagram", html)
             self.assertIn("child-a", html)
             self.assertIn("check_result", html)
             self.assertIn('<script id="report-data" type="application/json">{"goal_id"', html)
@@ -82,6 +88,8 @@ class ReportServerGitGithubSystemTests(unittest.TestCase):
             served = json.loads(request.urlopen(f"{base}/report-data.json", timeout=5).read().decode("utf-8"))
             self.assertTrue(any(event["event_type"] == "human_comment" for event in served["events"]))
             self.assertTrue(any(comment["classification"] == "request_change" for comment in served["human_comments"]))
+            self.assertTrue(any(marker["event_type"] == "human_comment" for marker in served["timeline"]["event_markers"]))
+            self.assertTrue(any(message["kind"] == "human_comment" for message in served["timeline"]["messages"]))
 
     def test_real_git_worktree_spawn_copies_long_horizon_state_then_parent_imports_child_artifact(self):
         root, goal_id, run_id = self.make_git_run()

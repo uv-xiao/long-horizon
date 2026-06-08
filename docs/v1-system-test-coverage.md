@@ -62,24 +62,26 @@ For a more detailed design-to-implementation proof chain, see
     envelopes, immediate import as typed human events, classification, and
     report regeneration.
 
-- **Report playback and slides**
+- **Report timeline**
   - Covered by every system test that calls `generate_report`, with stronger
-    checks in `test_report_generate_writes_slides_and_server_imports_pushed_human_comment`.
-  - Validates `report-data.json`, `progress.md`, `progress.html`,
-    `slides-data.json`, and `slides.html`.
-  - `report-data.json` must include event-sequence playback, snapshots, lanes,
-    process/workflow nodes, communication edges, comments, observer
-    interventions, and stable anchors.
-  - `progress.html` must include the slider-backed event playback graph.
-  - `slides.html` must include timeline slides, process map, human comments,
-    observer interventions, and one slide per event.
+    checks in `test_report_generate_writes_timeline_and_server_imports_pushed_human_comment`.
+  - Validates `report-data.json`, `progress.md`, and `progress.html`.
+  - `slides.html`/`slides-data.json`, when present, are compatibility aliases
+    to the canonical timeline and are not separate visualizations.
+  - `report-data.json` must include event-sequence playback, snapshots, timeline
+    lanes, process state segments, event markers, inter-process message links,
+    workflow transition data, comments, observer interventions, and stable
+    anchors.
+  - `progress.html` must include a Perfetto-like timeline with process lanes,
+    state bars, event markers, message links, clickable details, and a selected
+    workflow state-transition diagram.
 
 - **Local report server**
   - Covered by
-    `test_report_generate_writes_slides_and_server_imports_pushed_human_comment`.
-  - Validates serving `progress.html`, `report-data.json`, `slides.html`,
-    `slides-data.json`, and push-style `POST /comments` ingestion that imports
-    human comments immediately and regenerates reports.
+    `test_report_generate_writes_timeline_and_server_imports_pushed_human_comment`.
+  - Validates serving `progress.html`, `report-data.json`, compatibility
+    `slides.html`/`slides-data.json`, and push-style `POST /comments` ingestion
+    that imports human comments immediately and regenerates reports.
 
 - **Real git worktree process model**
   - Covered by
@@ -144,17 +146,18 @@ artifacts are:
 - `.long-horizon/goals/<goal-id>/runs/<run-id>/artifacts/imports/` for
   parent-imported child results.
 - `.long-horizon/goals/<goal-id>/runs/<run-id>/reports/progress.html` for the
-  slider playback graph.
-- `.long-horizon/goals/<goal-id>/runs/<run-id>/reports/slides.html` for the
-  timeline slide view.
-- `.long-horizon/goals/<goal-id>/runs/<run-id>/reports/report-data.json` and
-  `slides-data.json` for deterministic machine-checkable report data.
+  canonical Perfetto-like timeline.
+- `.long-horizon/goals/<goal-id>/runs/<run-id>/reports/report-data.json` for
+  deterministic machine-checkable report data.
+- `.long-horizon/goals/<goal-id>/runs/<run-id>/reports/slides.html`, if present,
+  only to confirm old links route back to `progress.html`.
 
-For visual acceptance, open `progress.html` and move the event slider from the
-first event to the last. The process map should reveal child processes,
-observer/task edges, human comment markers, transition history, and artifact
-imports over time. Open `slides.html` to inspect one event per slide with the
-same timeline context.
+For visual acceptance, open `progress.html`. The timeline should reveal child
+process lanes, observer/task lanes, workflow state bars, human comment markers,
+observer intervention markers, transition history, artifact imports, and
+message links between processes. Click state bars to inspect the workflow
+transition diagram for that selected state. Click event markers or message
+links to unfold source payload and provenance details.
 
 For persistent visual acceptance, run:
 

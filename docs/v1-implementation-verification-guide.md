@@ -21,8 +21,9 @@ The test strategy follows three rules:
    ledgers, and inspect generated reports.
 3. **Reports are validated as projections.** Tests do not treat report text as
    source of truth. They inspect canonical files first, then verify that
-   `report-data.json`, `progress.html`, `slides-data.json`, and `slides.html`
-   project those sources correctly.
+   `report-data.json` and `progress.html` project those sources correctly.
+   `slides.html`/`slides-data.json`, when present, are checked only as
+   compatibility aliases to the canonical timeline.
 
 Run all tests with:
 
@@ -59,9 +60,9 @@ The tests validate these file families:
 | `artifacts/` | Durable task evidence and imported child results | tests, child processes, adapters | transition and worktree tests |
 | `artifacts/snapshots/*.json` | Worktree state-copy provenance | `git_adapter.py` | real worktree system test |
 | `reports/report-data.json` | Deterministic report projection data | `report.py` | report and Humanize tests |
-| `reports/progress.html` | Human playback view with event slider | `report.py` | report tests and server test |
-| `reports/slides-data.json` | Deterministic slide projection data | `report.py` | report-server/git/GitHub test |
-| `reports/slides.html` | Human timeline slide view | `report.py` | report-server/git/GitHub test |
+| `reports/progress.html` | Canonical Perfetto-like timeline report | `report.py` | report tests and server test |
+| `reports/slides-data.json` | Compatibility metadata pointing to the canonical timeline | `report.py` | report-server/git/GitHub test |
+| `reports/slides.html` | Compatibility redirect/link to `progress.html` | `report.py` | report-server/git/GitHub test |
 | `reports/agent-brief.md` | Executor resume/attachment brief | `report.py`, `process.py` | recovery tests |
 | `inbox/comments/*.json` | Pushed human/external comment envelopes | `report_server.py`, adapters, tests | comment tests |
 
@@ -377,7 +378,7 @@ treated as workflow state unless gates explicitly require them.
 
 - `test_comment_import_deduplicates_push_envelopes`
   writes the same envelope twice and expects only one human event.
-- `test_report_generate_writes_slides_and_server_imports_pushed_human_comment`
+- `test_report_generate_writes_timeline_and_server_imports_pushed_human_comment`
   posts a comment to the local server and verifies it appears in served report
   data.
 - Humanize tests use pushed approval envelopes to satisfy human gates.
@@ -389,7 +390,7 @@ treated as workflow state unless gates explicitly require them.
 - `logs/notifications.jsonl`
 - `artifacts/human-comments/*.md` for large bodies
 - `reports/report-data.json`
-- `reports/slides-data.json`
+- `reports/report-data.json` timeline markers and messages
 
 ### Why This Works
 
@@ -397,13 +398,14 @@ The same normalized envelope drives local comments, report-server comments, and
 GitHub-adapter comments. That keeps human input independent of the transport
 channel.
 
-## Report Projection, Playback, And Slides
+## Report Projection And Timeline
 
 ### Design Intent
 
 Reporter output is for humans. It should make the run inspectable without
 becoming source of truth. The report must show process topology, workflow
-state, communication, interventions, human comments, and event-time playback.
+state, communication, interventions, human comments, and event-time order in one
+canonical Perfetto-like timeline.
 
 ### Implementation
 
@@ -414,27 +416,33 @@ state, communication, interventions, human comments, and event-time playback.
   - `_communication_edges` derives spawn, steer, artifact import, and review
     edges;
   - `_snapshot_at` computes state after each event;
+  - `_workflow_projection` compiles flow states and transitions into selected
+    workflow-state detail data;
+  - `_timeline_projection` builds lanes, state segments, event markers, and
+    inter-process message links;
   - `_event_lanes`, `_human_comments`, and `_observer_interventions` build
-    human-facing lanes;
-  - `render_html` writes `progress.html` with a slider, graph, lanes, and
-    inspector;
-  - `build_slides_data` creates one slide per event;
-  - `render_slides_html` writes the slide view with process map, timeline,
-    comments, interventions, and inspector.
+    backward-compatible summary data;
+  - `render_html` writes `progress.html` with a Perfetto-like timeline, process
+    state bars, event markers, message links, selected-state workflow diagram,
+    and inspector;
+  - `build_slides_data` and `render_slides_html` produce compatibility metadata
+    and a redirect/link back to `progress.html`.
 
 ### Test Design
 
 - `test_st_install_and_run_happy_path` verifies baseline report files and
   anchors.
 - `test_humanize_v1_two_loops_with_inner_fork_join_and_real_human_observer_report`
-  verifies process edges, steering edges, artifact-import edges, human comments,
-  observer interventions, snapshots, and playback JavaScript.
+  verifies process edges, steering messages, artifact-import messages, human
+  comments, observer interventions, timeline lanes, state bars, event markers,
+  message links, and selected-state diagram markup.
 - `test_humanize_v2_plan_lifecycle_rlcr_alignment_and_methodology_report`
   verifies critique, delta card, methodology report, observer intervention, and
   enough snapshots to prove a multi-phase workflow.
-- `test_report_generate_writes_slides_and_server_imports_pushed_human_comment`
-  verifies `slides.html`, `slides-data.json`, one slide per event, slide DOM
-  markers, and server-refreshed report data.
+- `test_report_generate_writes_timeline_and_server_imports_pushed_human_comment`
+  verifies canonical timeline files, compatibility-only slide files, process
+  lanes, spawn links, pushed human comment markers, human-comment links, and
+  server-refreshed report data.
 
 ### Files Opened For Validation
 
@@ -451,8 +459,10 @@ state, communication, interventions, human comments, and event-time playback.
 
 The report is regenerated from canonical state after state-changing operations.
 Tests validate both the deterministic JSON projections and the HTML markers
-needed for human inspection. The slider and slides are views over the same event
-sequence, so visual playback and machine-checkable data stay aligned.
+needed for human inspection. Timeline lanes, state bars, event markers, and
+message links all derive from the same unified event stream and snapshots, so
+human visual inspection and machine-checkable data stay aligned. Compatibility
+slide files cannot diverge because they only point back to `progress.html`.
 
 ## Local Report Server
 
@@ -467,7 +477,7 @@ workflow runtime. It serves latest reports and accepts pushed comments.
   - `ReportServer` wraps a `ThreadingHTTPServer`;
   - `GET /` and `GET /progress.html` regenerate and serve `progress.html`;
   - `GET /report-data.json` regenerates and serves report data;
-  - `GET /slides.html` and `GET /slides-data.json` serve slide artifacts;
+  - `GET /slides.html` and `GET /slides-data.json` serve compatibility aliases;
   - `POST /comments` writes an inbox envelope, imports it, and regenerates
     reports.
 - `long_horizon/cli.py`
@@ -475,7 +485,7 @@ workflow runtime. It serves latest reports and accepts pushed comments.
 
 ### Test Design
 
-- `test_report_generate_writes_slides_and_server_imports_pushed_human_comment`
+- `test_report_generate_writes_timeline_and_server_imports_pushed_human_comment`
   starts the server on localhost with an OS-assigned port, fetches
   `progress.html`, posts a comment, and fetches `report-data.json` to confirm
   the comment was imported.
@@ -570,7 +580,7 @@ for multiple language candidates and merging the winner.
   - imports child artifacts into parent state;
   - selects the shortest passing candidate and merges its branch;
   - writes parent-side git and workflow merge artifacts;
-  - generates `progress.html`, `slides.html`, and JSON report data;
+  - generates `progress.html` and JSON report data;
   - provides `status` and `clean` commands for reviewers.
 - `docs/persistent-calculator-demo.md`
   - documents the run command, persistent branches, key artifacts, and cleanup.
@@ -598,7 +608,6 @@ show the process/workflow timeline with human and observer events.
 
 - `../long-horizon-calculator-demo/demo-summary.json`
 - `../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/reports/progress.html`
-- `../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/reports/slides.html`
 - `../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/reports/report-data.json`
 - `../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/artifacts/selection/selected-candidate.json`
 - `../long-horizon-calculator-demo/parent/.long-horizon/goals/calculator-shortest/runs/run-1/artifacts/process-merges/`
@@ -825,14 +834,15 @@ directory and inspect these files:
 11. `artifacts/imports/`
     - Confirm selected child artifacts imported into parent state.
 12. `reports/report-data.json`
-    - Confirm event lanes, snapshots, edges, human comments, observer
-      interventions, and stable anchors.
+    - Confirm timeline lanes, state segments, event markers, message links,
+      workflow projection, human comments, observer interventions, and stable
+      anchors.
 13. `reports/progress.html`
-    - Move the event slider and confirm process/workflow/communication changes
-      appear over time.
-14. `reports/slides.html`
-    - Step through the slides and confirm each event has a process map,
-      timeline context, comments, interventions, and inspector data.
+    - Confirm process lanes, workflow state bars, human/observer event markers,
+      inter-process message links, selected-state transition diagram, and
+      click-to-inspect details are visible.
+14. `reports/slides.html`, if generated
+    - Confirm it is only a compatibility page pointing to `progress.html`.
 
 ## Coverage Boundaries
 

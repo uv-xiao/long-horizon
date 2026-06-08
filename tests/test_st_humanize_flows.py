@@ -139,8 +139,13 @@ class HumanizeStyleSystemTests(unittest.TestCase):
         self.assertTrue(any(edge["kind"] == "steer" and edge["to"] == "candidate-fast" for edge in data["communication_edges"]))
         self.assertTrue(any(comment["author"] == "architect" for comment in data["human_comments"]))
         self.assertTrue(any(item["target_process_id"] == "candidate-fast" for item in data["observer_interventions"]))
-        self.assertIn("function draw(idx)", html)
-        self.assertIn("data.snapshots", html)
+        self.assertTrue(any(lane["lane_id"] == "process:candidate-fast" for lane in data["timeline"]["lanes"]))
+        self.assertTrue(any(message["kind"] == "artifact_import" for message in data["timeline"]["messages"]))
+        self.assertTrue(any(message["kind"] == "steer" and message["to_lane_id"] == "process:candidate-fast" for message in data["timeline"]["messages"]))
+        self.assertTrue(any(marker["event_type"] == "human_comment" for marker in data["timeline"]["event_markers"]))
+        self.assertIn("perfetto-timeline", html)
+        self.assertIn("timeline-message-link", html)
+        self.assertIn("state-transition-diagram", html)
 
     def test_humanize_v2_plan_lifecycle_rlcr_alignment_and_methodology_report(self):
         flow = {
@@ -244,6 +249,8 @@ class HumanizeStyleSystemTests(unittest.TestCase):
         self.assertTrue(any(item["message"].startswith("full alignment check") for item in data["observer_interventions"]))
         self.assertGreaterEqual(len(data["snapshots"]), 15)
         self.assertIn("#state-at-0", data["anchors"])
+        self.assertTrue(any(segment["state"] == "methodology_report" for lane in data["timeline"]["lanes"] for segment in lane.get("state_segments", [])))
+        self.assertTrue(any(marker["event_type"] == "methodology_report_created" for marker in data["timeline"]["event_markers"]))
 
 
 def _fake_builder_round(root: Path, goal_id: str, run_id: str, process_id: str, round_id: str) -> None:
