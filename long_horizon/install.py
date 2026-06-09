@@ -45,6 +45,7 @@ def install(
 def _install_plan(root: Path, capabilities: dict) -> str:
     existing = [name for name in ["AGENTS.md", "CLAUDE.md", ".agents", ".claude", ".github", ".gitignore"] if (root / name).exists()]
     mode = capabilities.get("analysis", {}).get("operation_mode", "runtime-owned")
+    feature_settings = capabilities.get("feature_settings", {})
     details = capabilities.get("mode", {})
     return "\n".join(
         [
@@ -53,6 +54,10 @@ def _install_plan(root: Path, capabilities: dict) -> str:
             f"Target: {root}",
             f"Created at: {now_iso()}",
             f"Operation mode: `{mode}`",
+            f"Derived feature profile: `{capabilities.get('analysis', {}).get('profile_label', '')}`",
+            "",
+            "## Feature Settings",
+            *(f"- `{key}`: `{value}`" for key, value in sorted(feature_settings.items())),
             "",
             "## Existing Agent Surfaces",
             *(f"- {item}" for item in existing),

@@ -8,7 +8,7 @@ from typing import Any
 from .io import copy_file, write_json, write_text
 from .logger import append_event
 from .paths import lh_root, run_dir
-from .process import create_process
+from .process import create_process, load_process, write_process
 from .time import now_iso
 
 
@@ -36,12 +36,13 @@ def spawn_child_worktree(
         role="task",
         workspace_path=child_path,
         parent_process_id=parent_process_id,
-        extra={"branch": branch, "worktree_path": str(child_path), "state_path": str(child_path / ".long-horizon")},
+        extra={"branch": branch, "worktree_path": str(child_path)},
     )
     manifest = _snapshot_manifest(root_path, goal_id, run_id, process_id, branch, child_path)
     manifest_rel = Path("artifacts") / "snapshots" / f"{process_id}.manifest.json"
     write_json(run_dir(root_path, goal_id, run_id) / manifest_rel, manifest)
     _copy_long_horizon_state(root_path, child_path)
+    _rewrite_child_copied_process_state(child_path, goal_id, run_id, process_id)
     write_json(run_dir(child_path, goal_id, run_id) / manifest_rel, manifest)
     append_event(
         root_path,
@@ -256,6 +257,14 @@ def _copy_long_horizon_state(root: Path, child_path: Path) -> None:
     if dst.exists():
         shutil.rmtree(dst)
     shutil.copytree(src, dst)
+
+
+def _rewrite_child_copied_process_state(child_path: Path, goal_id: str, run_id: str, process_id: str) -> None:
+    data = load_process(child_path, goal_id, run_id, process_id)
+    data["workspace_path"] = str(child_path)
+    data["worktree_path"] = str(child_path)
+    data["state_path"] = str(run_dir(child_path, goal_id, run_id) / "processes" / process_id)
+    write_process(child_path, goal_id, run_id, process_id, data)
 
 
 def _snapshot_manifest(root: Path, goal_id: str, run_id: str, process_id: str, branch: str, child_path: Path) -> dict[str, Any]:

@@ -6,44 +6,53 @@ from pathlib import Path
 from typing import Any
 
 from .capabilities import load_capabilities
+from .config import load_config
 from .io import read_jsonl, read_toml, write_json, write_text
-from .paths import boards_dir, processes_dir, reports_dir, run_dir
+from .mailbox import collect_mailboxes
+from .paths import boards_dir, process_amendments_path, process_flow_path, process_metadata_path, processes_dir, reports_dir, run_dir
 from .workflow import allowed_next
 
 
 def generate_report(root: str | Path, goal_id: str, run_id: str) -> dict[str, Any]:
     data = build_report_data(root, goal_id, run_id)
     rdir = reports_dir(root, goal_id, run_id)
-    slides = build_slides_data(data)
     write_json(rdir / "report-data.json", data)
-    write_json(rdir / "slides-data.json", slides)
     write_text(rdir / "progress.md", render_markdown(data))
     write_text(rdir / "progress.html", render_html(data))
-    write_text(rdir / "slides.html", render_slides_html(slides))
     return data
 
 
 def build_report_data(root: str | Path, goal_id: str, run_id: str) -> dict[str, Any]:
     rdir = run_dir(root, goal_id, run_id)
     board = read_toml(boards_dir(root, goal_id, run_id) / "task.toml")
-    flow = read_toml(rdir / "flow.snapshot.toml")
-    processes = [_process_node(path, board) for path in sorted(processes_dir(root, goal_id, run_id).glob("*.toml"))]
+    flow = _primary_flow(root, goal_id, run_id)
+    processes = [_process_node(path, board, root, goal_id, run_id) for path in _process_metadata_paths(root, goal_id, run_id)]
     events = _unified_events(rdir)
-    edges = _communication_edges(events, processes)
+    mailboxes = collect_mailboxes(root, goal_id, run_id, [str(proc["process_id"]) for proc in processes])
+    mailbox_messages = _mailbox_messages(mailboxes)
+    amendments = _workflow_amendments(root, goal_id, run_id, processes)
+    edges = _communication_edges(events, processes, mailbox_messages)
     initial_state = flow.get("flow", {}).get("initial_state", board.get("current_state"))
     snapshots = [_snapshot_at(events[: idx + 1], processes, initial_state, idx) for idx in range(len(events))]
     workflow = _workflow_projection(flow, board, events)
     timeline = _timeline_projection(events, processes, edges, snapshots, workflow)
     capabilities = load_capabilities(root)
+    config = load_config(root)
     data = {
         "goal_id": goal_id,
         "run_id": run_id,
+        "feature_settings": config.get("features", {}),
+        "profile": config.get("profile", {}),
+        "responsibility_map": config.get("responsibility", {}),
         "operation_mode": capabilities.get("analysis", {}).get("operation_mode", "runtime-owned"),
         "agent_capabilities": capabilities,
         "current_state": board.get("current_state"),
         "allowed_next": board.get("allowed_next", allowed_next(flow, board.get("current_state", ""))),
         "playback": {"axis": "event_sequence", "count": len(events), "current_index": max(0, len(events) - 1)},
         "processes": processes,
+        "mailboxes": mailboxes,
+        "mailbox_messages": mailbox_messages,
+        "workflow_amendments": amendments,
         "events": events,
         "event_lanes": _event_lanes(events),
         "communication_edges": edges,
@@ -63,7 +72,8 @@ def generate_agent_brief(root: str | Path, goal_id: str, run_id: str, process_id
     mode = capabilities.get("analysis", {}).get("operation_mode", "runtime-owned")
     mode_details = capabilities.get("mode", {})
     process_path = processes_dir(root, goal_id, run_id) / f"{process_id}.toml"
-    proc = read_toml(process_path) if process_path.exists() else {"process_id": process_id, "status": "unknown"}
+    canonical_process_path = process_metadata_path(root, goal_id, run_id, process_id)
+    proc = read_toml(canonical_process_path) if canonical_process_path.exists() else read_toml(process_path) if process_path.exists() else {"process_id": process_id, "status": "unknown"}
     events = _unified_events(rdir)
     observer_messages = [
         event
@@ -79,6 +89,7 @@ Process: `{process_id}`
 Role: `{proc.get('role', '')}`
 Status: `{proc.get('status', '')}`
 Operation mode: `{mode}`
+Profile: `{load_config(root).get('profile', {}).get('label', '')}`
 Workspace: `{proc.get('workspace_path', '')}`
 State root: `{proc.get('state_path', '')}`
 
@@ -123,13 +134,17 @@ def render_markdown(data: dict[str, Any]) -> str:
         f"Goal: `{data['goal_id']}`",
         f"Run: `{data['run_id']}`",
         f"Operation mode: `{data.get('operation_mode', '')}`",
+        f"Feature profile: `{data.get('profile', {}).get('label', '')}`",
         f"Current state: `{data['current_state']}`",
         f"Allowed next: {', '.join(data['allowed_next']) or '(none)'}",
         "",
         "## Processes",
     ]
     for proc in data["processes"]:
-        lines.append(f"- `{proc['process_id']}` {proc['role']} {proc['status']} at `{proc['workflow_state']}`")
+        lines.append(f"- `{proc['process_id']}` {proc.get('process_kind', '')} {proc['role']} {proc['status']} at `{proc['workflow_state']}`")
+    lines.extend(["", "## Mailboxes"])
+    for message in data.get("mailbox_messages", [])[-8:]:
+        lines.append(f"- `{message['message_id']}` `{message['message_type']}` `{message['source_process_id']}` -> `{message['target_process_id']}`")
     lines.extend(["", "## Recent Events"])
     for event in recent:
         lines.append(f"- `{event['event_id']}` `{event['event_type']}` from `{event['process_id']}`")
@@ -432,49 +447,61 @@ document.querySelectorAll('.timeline-message-link').forEach(el => el.addEventLis
 """
 
 
-def build_slides_data(data: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "goal_id": data["goal_id"],
-        "run_id": data["run_id"],
-        "canonical_view": "progress.html",
-        "timeline_ref": "report-data.json#timeline",
-        "compatibility": "slides view has been folded into the canonical progress timeline",
-    }
+def _process_metadata_paths(root: str | Path, goal_id: str, run_id: str) -> list[Path]:
+    base = processes_dir(root, goal_id, run_id)
+    paths = list(base.glob("*/process.toml"))
+    seen = {path.parent.name for path in paths}
+    for legacy in base.glob("*.toml"):
+        if legacy.stem not in seen:
+            paths.append(legacy)
+    return sorted(paths, key=lambda p: (p.parent.name if p.name == "process.toml" else p.stem))
 
 
-def render_slides_html(slides_data: dict[str, Any]) -> str:
-    payload = _json_script_payload(slides_data)
-    return f"""<!doctype html>
-<html lang="en">
-<meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=progress.html">
-<title>Long-Horizon Timeline Compatibility</title>
-<style>
-body {{ margin: 0; font-family: system-ui, sans-serif; color: #17202a; background: #f5f6f2; }}
-main {{ margin: 40px auto; max-width: 720px; background: white; border: 1px solid #d8d8d2; border-radius: 6px; padding: 18px; }}
-a {{ color: #1d4f8f; }}
-pre {{ white-space: pre-wrap; background: #f7f7f4; padding: 10px; border-radius: 4px; }}
-</style>
-<main>
-  <h1>Timeline Compatibility</h1>
-  <p>The slide view has been folded into the canonical timeline report.</p>
-  <p><a href="progress.html">Open the canonical timeline report</a>.</p>
-  <pre>{html.escape(json.dumps(slides_data, indent=2, ensure_ascii=False))}</pre>
-</main>
-<script id="slides-data" type="application/json">{payload}</script>
-</html>
-"""
+def _primary_flow(root: str | Path, goal_id: str, run_id: str) -> dict[str, Any]:
+    path = process_flow_path(root, goal_id, run_id, "primary")
+    if path.exists():
+        return read_toml(path)
+    return read_toml(run_dir(root, goal_id, run_id) / "flow.snapshot.toml")
 
 
-def _process_node(path: Path, board: dict[str, Any]) -> dict[str, Any]:
+def _mailbox_messages(mailboxes: dict[str, dict[str, list[dict[str, Any]]]]) -> list[dict[str, Any]]:
+    messages: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for process_id, files in sorted(mailboxes.items()):
+        for name in ["outbox", "inbox"]:
+            for item in files.get(name, []):
+                key = (str(item.get("message_id", "")), name)
+                if key in seen:
+                    continue
+                seen.add(key)
+                messages.append({**item, "process_id": process_id, "mailbox_file": name})
+    messages.sort(key=lambda item: (str(item.get("created_at", "")), str(item.get("delivered_at", "")), str(item.get("message_id", "")), str(item.get("mailbox_file", ""))))
+    return messages
+
+
+def _workflow_amendments(root: str | Path, goal_id: str, run_id: str, processes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    amendments: list[dict[str, Any]] = []
+    for proc in processes:
+        process_id = str(proc.get("process_id", ""))
+        for item in read_jsonl(process_amendments_path(root, goal_id, run_id, process_id)):
+            amendments.append({**item, "process_id": process_id})
+    return amendments
+
+
+def _process_node(path: Path, board: dict[str, Any], root: str | Path, goal_id: str, run_id: str) -> dict[str, Any]:
     data = read_toml(path)
+    process_id = str(data.get("process_id", path.parent.name if path.name == "process.toml" else path.stem))
+    flow = read_toml(process_flow_path(root, goal_id, run_id, process_id)) if process_flow_path(root, goal_id, run_id, process_id).exists() else {}
     return {
-        "process_id": data.get("process_id"),
+        "process_id": process_id,
+        "process_kind": data.get("process_kind", "workspace"),
         "role": data.get("role"),
         "status": data.get("status"),
-        "workflow_state": data.get("workflow_state", board.get("current_state")),
+        "workflow_state": data.get("workflow_state") or board.get("current_state"),
+        "flow_id": flow.get("flow", {}).get("id", ""),
         "parent_process_id": data.get("parent_process_id", ""),
         "workspace_path": data.get("workspace_path", ""),
+        "state_path": data.get("state_path", ""),
         "anchor": f"#process-{data.get('process_id')}",
     }
 
@@ -492,7 +519,7 @@ def _unified_events(rdir: Path) -> list[dict[str, Any]]:
     return events
 
 
-def _communication_edges(events: list[dict[str, Any]], processes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _communication_edges(events: list[dict[str, Any]], processes: list[dict[str, Any]], mailbox_messages: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     edges: list[dict[str, Any]] = []
     process_ids = {p["process_id"] for p in processes}
     for proc in processes:
@@ -511,6 +538,17 @@ def _communication_edges(events: list[dict[str, Any]], processes: list[dict[str,
         if target in process_ids and event.get("process_id") in process_ids:
             kind = "steer" if event["event_type"].startswith("intervention") else "message"
             edges.append({"kind": kind, "from": event["process_id"], "to": target, "event_id": event["event_id"]})
+    for message in mailbox_messages or []:
+        if message.get("source_process_id") in process_ids and message.get("target_process_id") in process_ids:
+            edges.append(
+                {
+                    "kind": message.get("message_type", "mailbox_message"),
+                    "from": message["source_process_id"],
+                    "to": message["target_process_id"],
+                    "event_id": message.get("message_id", ""),
+                    "message_id": message.get("message_id", ""),
+                }
+            )
     return edges
 
 

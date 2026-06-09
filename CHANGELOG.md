@@ -4,6 +4,11 @@ This file tracks commit/PR-sized changes while the template evolves. It is not a
 
 ## Current Change
 
+- Completed the v1 runtime upgrade around feature settings, two process kinds,
+  per-process FIFO mailboxes, process-local `flow.toml`, task
+  intake/initialization split, full GitHub virtual channel envelopes,
+  deposition/merge-repair skills, slide artifact removal, and hard system tests
+  for the new process/message/report model.
 - Started the first-version implementation PR with an implementation brief and decision list.
 - Resolved the v1 workflow-format decision around enforceable structured state, transition validation, and static HTML timeline reporting.
 - Resolved workflow state ownership: only the transition tool mutates workflow boards.

@@ -68,17 +68,9 @@ def _handler(root: Path, goal_id: str, run_id: str):
                 generate_report(root, goal_id, run_id)
                 self._send_file(reports_dir(root, goal_id, run_id) / "progress.html")
                 return
-            if self.path == "/slides.html":
-                generate_report(root, goal_id, run_id)
-                self._send_file(reports_dir(root, goal_id, run_id) / "slides.html")
-                return
             if self.path == "/report-data.json":
                 generate_report(root, goal_id, run_id)
                 self._send_json(read_json(reports_dir(root, goal_id, run_id) / "report-data.json"))
-                return
-            if self.path == "/slides-data.json":
-                generate_report(root, goal_id, run_id)
-                self._send_json(read_json(reports_dir(root, goal_id, run_id) / "slides-data.json"))
                 return
             self.send_error(404, "not found")
 

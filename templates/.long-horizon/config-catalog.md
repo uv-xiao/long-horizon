@@ -16,12 +16,26 @@ Each policy entry should record:
 - `agent.substrate`: `codex-goal`, `codex`, `claude-code`, `humanize`, `native-process-agent`, or `manual`.
 - `agent.goal_mode`: whether Codex `/goal` is used as the continuation mechanism.
 - `agent.process_adapter`: how logical process operations map to the selected agent.
-- `agent.operation_mode`: `runtime-owned`, `native-agent`, or `hybrid`. This is selected during capability analysis and may be overridden during installation or task setup. Runtime-owned mode lets the template own durable process/workflow mechanics; native-agent mode configures an existing agent loop without duplicating it; hybrid mode splits responsibilities explicitly.
+- `agent.operation_mode`: compatibility label only. The durable source of truth is `[features]`.
 - `agent.capability_cache`: `.long-horizon/agent-capabilities.toml` stores a fingerprinted analysis of existing repo and target-agent features. Refresh it when agent instructions, hooks, skills, or target-agent selection change.
 - `agent.native_feature_enablement`: native hooks, subagents, stop gates, review commands, or GUI/report features that should be enabled instead of reimplemented by the template.
 
+## Feature Settings
+
+- `features.runtime_state`: whether `.long-horizon/` owns durable goal/run/process/workflow state.
+- `features.prompt_templates`: whether phase prompt templates are installed and used.
+- `features.transition_validation`: always enabled when `runtime_state` is true.
+- `features.message_mailboxes`: always enabled when `runtime_state` is true; creates per-process FIFO mailboxes.
+- `features.local_supervisor`: optional future runtime supervisor; supervision is config, not a process kind.
+- `features.native_agent_loop`: whether the selected target agent owns continuation/loop execution.
+- `features.report_server`: whether local report serving is available.
+- `features.github_channel`: whether GitHub issue/PR virtual channel operations are enabled.
+- `profile.label`: derived from feature settings; not source of truth.
+- `responsibility.*`: generated map of template-owned and target-agent-owned responsibilities.
+
 ## Process And Workspace
 
+- `process.kind`: each process is either `workspace` or `virtual`. External services are virtual processes. `supervised` is not a process kind.
 - `process.workspace_mode`: `original_checkout`, `worktree`, `branchless_read_only`, or `native_process`.
 - `process.worktree_root`: where child worktrees are created.
 - `process.branch_policy`: `code_changes_require_branch` or `read_only_branchless`.
@@ -37,6 +51,17 @@ Each policy entry should record:
 - `state.snapshot_exclusions`: unsafe or impractical paths excluded from child snapshots.
 - `state.snapshot_manifest_required`: whether child spawn must record copied and excluded paths.
 - `state.merge_import_policy`: which child-produced deltas are imported into parent state.
+- `state.process_flow`: each process owns `processes/<process-id>/flow.toml`.
+- `state.flow_amendments`: workflow owner processes append amendments to `processes/<process-id>/flow-amendments.jsonl`.
+
+## Process Mailboxes
+
+- `mailbox.model`: per-process FIFO files.
+- `mailbox.inbox`: `processes/<process-id>/mailbox/inbox.jsonl`.
+- `mailbox.outbox`: `processes/<process-id>/mailbox/outbox.jsonl`.
+- `mailbox.ack`: `processes/<process-id>/mailbox/ack.jsonl`.
+- `mailbox.delivery`: async append-only delivery. Ack is optional and does not block delivery.
+- `mailbox.report_projection`: mailbox messages are included in `report-data.json`, `progress.md`, and `progress.html`.
 
 ## Version Control
 
@@ -53,6 +78,7 @@ Each policy entry should record:
 - `safety.network`: allowed network and remote execution behavior.
 - `safety.command_allowlist`: optional command allowlist.
 - `safety.sandbox`: `none`, `allowlist`, `container`, `remote`, or `approval_required`.
+- `safety.dangerous_amendment_classes`: secrets/auth, destructive git, irreversible external effects, acceptance weakening, human-gate removal, and external issue/PR closing require human approval by default.
 
 ## Workflow Gates
 
@@ -91,15 +117,26 @@ Each policy entry should record:
 - `memory.deposition`: what becomes reusable memory.
 - `adapters.learned_usage`: whether learned adapters may be used immediately.
 - `adapters.promotion`: how learned adapters become reusable skills or memory.
+- `deposition.promote_skill_template`: prompt/skill used to maintain `.agents/skills`.
+- `deposition.promote_rule_template`: prompt/skill used to maintain `.agents/rules`.
+- `deposition.promote_memory_template`: prompt/skill used to maintain memory files.
+- `deposition.promote_adapter_template`: prompt/skill used to maintain adapter templates.
 
 ## Reporting
 
-- `report.formats`: Markdown, HTML, SVG, CLI, GitHub, Feishu, slides, or dashboard.
+- `report.formats`: Markdown, HTML, JSON report data, CLI, GitHub, Feishu, or dashboard. Slide artifacts are not generated in v1 completion.
 - `report.notification_channels`: where progress reports are sent.
 - `report.workflow_visualization`: SVG/HTML workflow projection settings.
 - `report.intervention_view`: compact intervention markers in the main timeline plus a detailed observer intervention lane/table.
 - `report.agent_brief_filtering`: one brief schema with process-targeted observer findings and steering instructions, not separate audience-specific brief types by default.
 - `report.timeline_analysis`: whether reporter-authored annotations, causal guesses, risk notes, and review questions may be written beside the source-backed timeline for human review.
+
+## GitHub Virtual Channel
+
+- `github.channel_process`: virtual process id for GitHub issue/PR operations.
+- `github.operations`: create/comment/close issue, create/comment/close PR, import issue comments, and import PR comments.
+- `github.auth`: repo-local `.gh/` or `tmp/gh/` only. Missing local auth must produce setup guidance instead of silently using global auth.
+- `github.agent_skill_fallback`: operation envelopes may generate a strict brief telling the target agent to use installed GitHub skills when direct adapter execution is unavailable.
 
 ## Changing Policy
 

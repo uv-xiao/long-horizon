@@ -10,7 +10,7 @@ from long_horizon.install import install
 from long_horizon.io import read_toml, write_json, write_toml
 from long_horizon.logger import append_event
 from long_horizon.observer import create_observer, record_intervention
-from long_horizon.paths import boards_dir, run_dir
+from long_horizon.paths import boards_dir, process_flow_path, run_dir
 from long_horizon.process import create_process
 from long_horizon.report import generate_report
 from long_horizon.transition import transition
@@ -28,6 +28,7 @@ class HumanizeStyleSystemTests(unittest.TestCase):
         create_goal(root, "goal-humanize", contract)
         create_run(root, "goal-humanize", "run-1")
         write_toml(run_dir(root, "goal-humanize", "run-1") / "flow.snapshot.toml", flow)
+        write_toml(process_flow_path(root, "goal-humanize", "run-1", "primary"), flow)
         initial = flow["flow"]["initial_state"]
         board = read_toml(boards_dir(root, "goal-humanize", "run-1") / "task.toml")
         board["current_state"] = initial
@@ -147,9 +148,9 @@ class HumanizeStyleSystemTests(unittest.TestCase):
         self.assertIn("timeline-message-link", html)
         self.assertIn("state-transition-diagram", html)
 
-    def test_humanize_v2_plan_lifecycle_rlcr_alignment_and_methodology_report(self):
+    def test_second_generation_humanize_plan_lifecycle_rlcr_alignment_and_methodology_report(self):
         flow = {
-            "flow": {"id": "humanize-v2-plan-constitution", "initial_state": "plan_expansion", "terminal_states": ["completed"]},
+            "flow": {"id": "humanize-second-generation-plan-constitution", "initial_state": "plan_expansion", "terminal_states": ["completed"]},
             "states": [
                 {"id": "plan_expansion", "kind": "architect"},
                 {"id": "adversarial_plan_critique", "kind": "critic"},
@@ -170,7 +171,7 @@ class HumanizeStyleSystemTests(unittest.TestCase):
                 {"from": "methodology_report", "to": "completed", "requires_artifacts": ["artifacts/methodology/process-report.md"]},
             ],
         }
-        root = self.make_run(flow, "# Humanize v2 mimic\n\nPlan constitution, RLCR, full alignment check, amendment, methodology deposition.\n")
+        root = self.make_run(flow, "# Second-generation Humanize mimic\n\nPlan constitution, RLCR, full alignment check, amendment, methodology deposition.\n")
         run = run_dir(root, "goal-humanize", "run-1")
         _write_artifact(run, "artifacts/plan/expanded-plan.md", "goal, acceptance, constraints, milestones")
         self.assertEqual(transition(root, "goal-humanize", "run-1", "primary", "adversarial_plan_critique")["status"], "applied")
@@ -192,14 +193,14 @@ class HumanizeStyleSystemTests(unittest.TestCase):
         )
         self.assertEqual(transition(root, "goal-humanize", "run-1", "primary", "plan_acceptance_gate")["status"], "applied")
         write_json(
-            inbox_dir(root) / "local-v2-plan.json",
+            inbox_dir(root) / "local-second-generation-plan.json",
             {
                 "channel": "local",
-                "external_comment_id": "v2-plan",
-                "external_thread_id": "thread-v2",
+                "external_comment_id": "second-generation-plan",
+                "external_thread_id": "thread-second-generation",
                 "author": "architect",
                 "target_refs": ["plan_accepted", "#state-at-0"],
-                "body": "approve v2 plan constitution",
+                "body": "approve second-generation plan constitution",
             },
         )
         import_comments(root, "goal-humanize", "run-1")
@@ -219,11 +220,11 @@ class HumanizeStyleSystemTests(unittest.TestCase):
         )
         self.assertEqual(transition(root, "goal-humanize", "run-1", "primary", "plan_amendment_review")["status"], "applied")
         write_json(
-            inbox_dir(root) / "local-v2-amendment.json",
+            inbox_dir(root) / "local-second-generation-amendment.json",
             {
                 "channel": "local",
-                "external_comment_id": "v2-amendment",
-                "external_thread_id": "thread-v2",
+                "external_comment_id": "second-generation-amendment",
+                "external_thread_id": "thread-second-generation",
                 "author": "architect",
                 "target_refs": ["amendment_approved"],
                 "body": "approve amendment: add batch=1 acceptance case",

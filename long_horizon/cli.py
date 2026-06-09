@@ -10,14 +10,15 @@ from .comments import import_comments
 from .config import load_config, set_config_value, validate_config
 from .goal import create_goal, create_run
 from .git_adapter import import_child_state, merge_child_branch, spawn_child_worktree
-from .github_adapter import GitHubAdapter
+from .github_adapter import GitHubAdapter, record_github_operation
 from .install import install
 from .logger import append_event, append_loose
+from .mailbox import ack_message, read_mailbox, send_message
 from .observer import create_observer, record_intervention
-from .process import create_process, heartbeat, interrupt, resume
+from .process import create_process, heartbeat, interrupt, record_flow_amendment, resume
 from .report import generate_report
 from .report_server import ReportServer
-from .task_setup import create_task_setup
+from .task_setup import create_task_setup, initialize_task
 from .transition import transition
 from .validators import validate_root
 
@@ -76,6 +77,12 @@ def main(argv: list[str] | None = None) -> int:
     tp.add_argument("--task-id")
     tp.add_argument("--target-agent", default="auto")
     tp.add_argument("--operation-mode", choices=["runtime-owned", "native-agent", "hybrid"])
+    tp = tsub.add_parser("initialize")
+    tp.add_argument("--root", required=True)
+    tp.add_argument("--task-id", required=True)
+    tp.add_argument("--goal-id", required=True)
+    tp.add_argument("--run-id", required=True)
+    tp.add_argument("--contract-text")
 
     p = sub.add_parser("validate")
     p.add_argument("--root", required=True)
@@ -116,6 +123,7 @@ def main(argv: list[str] | None = None) -> int:
         pp.add_argument("--process-id", required=True)
         if name == "create":
             pp.add_argument("--role", default="task")
+            pp.add_argument("--process-kind", choices=["workspace", "virtual"], default="workspace")
         if name == "interrupt":
             pp.add_argument("--reason", required=True)
         if name == "resume":
@@ -143,6 +151,45 @@ def main(argv: list[str] | None = None) -> int:
     pp.add_argument("--child-process-id", required=True)
     pp.add_argument("--branch", required=True)
     pp.add_argument("--target-process-id", default="primary")
+    pp = psub.add_parser("amend-flow")
+    pp.add_argument("--root", required=True)
+    pp.add_argument("--goal-id", required=True)
+    pp.add_argument("--run-id", required=True)
+    pp.add_argument("--owner-process-id", required=True)
+    pp.add_argument("--target-process-id", required=True)
+    pp.add_argument("--reason", required=True)
+    pp.add_argument("--risk-class", default="normal")
+    pp.add_argument("--approval-ref", action="append", default=[])
+    pp.add_argument("--evidence-ref", action="append", default=[])
+    pp.add_argument("--flow-patch-ref", default="")
+
+    p = sub.add_parser("mailbox")
+    msub = p.add_subparsers(dest="mailbox_cmd", required=True)
+    mp = msub.add_parser("send")
+    mp.add_argument("--root", required=True)
+    mp.add_argument("--goal-id", required=True)
+    mp.add_argument("--run-id", required=True)
+    mp.add_argument("--source-process-id", required=True)
+    mp.add_argument("--target-process-id", required=True)
+    mp.add_argument("--message-type", required=True)
+    mp.add_argument("--body", required=True)
+    mp.add_argument("--artifact-ref", action="append", default=[])
+    mp.add_argument("--causal-ref", action="append", default=[])
+    mp.add_argument("--requires-ack", action="store_true")
+    mp = msub.add_parser("list")
+    mp.add_argument("--root", required=True)
+    mp.add_argument("--goal-id", required=True)
+    mp.add_argument("--run-id", required=True)
+    mp.add_argument("--process-id", required=True)
+    mp.add_argument("--box", choices=["inbox", "outbox", "ack"], default="inbox")
+    mp = msub.add_parser("ack")
+    mp.add_argument("--root", required=True)
+    mp.add_argument("--goal-id", required=True)
+    mp.add_argument("--run-id", required=True)
+    mp.add_argument("--process-id", required=True)
+    mp.add_argument("--message-id", required=True)
+    mp.add_argument("--status", default="acknowledged")
+    mp.add_argument("--body", default="")
 
     p = sub.add_parser("observer")
     osub = p.add_subparsers(dest="observer_cmd", required=True)
@@ -184,6 +231,20 @@ def main(argv: list[str] | None = None) -> int:
     ghsub = p.add_subparsers(dest="github_cmd", required=True)
     gp = ghsub.add_parser("repo-info")
     gp.add_argument("--root", required=True)
+    gp = ghsub.add_parser("operation")
+    gp.add_argument("--root", required=True)
+    gp.add_argument("--goal-id", required=True)
+    gp.add_argument("--run-id", required=True)
+    gp.add_argument("--operation", required=True)
+    gp.add_argument("--target", choices=["issue", "pr"], required=True)
+    gp.add_argument("--title", default="")
+    gp.add_argument("--body", default="")
+    gp.add_argument("--number", type=int)
+    gp.add_argument("--head", default="")
+    gp.add_argument("--base", default="")
+    gp.add_argument("--process-id", default="github")
+    gp.add_argument("--target-process-id", default="primary")
+    gp.add_argument("--execute", action="store_true")
 
     args = parser.parse_args(argv)
     result = _dispatch(args)
@@ -226,6 +287,8 @@ def _dispatch(args: argparse.Namespace):
         return {"run_dir": str(create_run(args.root, args.goal_id, args.run_id))}
     if args.cmd == "task" and args.task_cmd == "setup":
         return create_task_setup(args.root, args.request, task_id=args.task_id, target_agent=args.target_agent, operation_mode=args.operation_mode)
+    if args.cmd == "task" and args.task_cmd == "initialize":
+        return initialize_task(args.root, args.task_id, args.goal_id, args.run_id, contract_text=args.contract_text)
     if args.cmd == "validate":
         errors = validate_root(args.root, args.goal_id, args.run_id)
         if errors:
@@ -240,7 +303,7 @@ def _dispatch(args: argparse.Namespace):
         return transition(args.root, args.goal_id, args.run_id, args.process_id, args.to)
     if args.cmd == "process":
         if args.process_cmd == "create":
-            return {"process": str(create_process(args.root, args.goal_id, args.run_id, args.process_id, role=args.role))}
+            return {"process": str(create_process(args.root, args.goal_id, args.run_id, args.process_id, role=args.role, process_kind=args.process_kind))}
         if args.process_cmd == "heartbeat":
             heartbeat(args.root, args.goal_id, args.run_id, args.process_id)
             return {"heartbeat": args.process_id}
@@ -264,6 +327,37 @@ def _dispatch(args: argparse.Namespace):
             )
         if args.process_cmd == "merge-child-branch":
             return merge_child_branch(args.root, args.goal_id, args.run_id, args.child_process_id, args.branch, args.target_process_id)
+        if args.process_cmd == "amend-flow":
+            return record_flow_amendment(
+                args.root,
+                args.goal_id,
+                args.run_id,
+                args.owner_process_id,
+                args.target_process_id,
+                args.reason,
+                risk_class=args.risk_class,
+                evidence_refs=args.evidence_ref,
+                approval_refs=args.approval_ref,
+                flow_patch_ref=args.flow_patch_ref,
+            )
+    if args.cmd == "mailbox":
+        if args.mailbox_cmd == "send":
+            return send_message(
+                args.root,
+                args.goal_id,
+                args.run_id,
+                args.source_process_id,
+                args.target_process_id,
+                args.message_type,
+                args.body,
+                artifact_refs=args.artifact_ref,
+                causal_refs=args.causal_ref,
+                requires_ack=args.requires_ack,
+            )
+        if args.mailbox_cmd == "list":
+            return {"messages": read_mailbox(args.root, args.goal_id, args.run_id, args.process_id, args.box)}
+        if args.mailbox_cmd == "ack":
+            return ack_message(args.root, args.goal_id, args.run_id, args.process_id, args.message_id, status=args.status, body=args.body)
     if args.cmd == "observer":
         if args.observer_cmd == "create":
             return {"observer": str(create_observer(args.root, args.goal_id, args.run_id, args.process_id, args.observe_target))}
@@ -278,6 +372,22 @@ def _dispatch(args: argparse.Namespace):
         return {"imported": import_comments(args.root, args.goal_id, args.run_id)}
     if args.cmd == "github" and args.github_cmd == "repo-info":
         return GitHubAdapter(args.root).repo_info()
+    if args.cmd == "github" and args.github_cmd == "operation":
+        return record_github_operation(
+            args.root,
+            args.goal_id,
+            args.run_id,
+            args.operation,
+            args.target,
+            title=args.title,
+            body=args.body,
+            number=args.number,
+            head=args.head,
+            base=args.base,
+            process_id=args.process_id,
+            target_process_id=args.target_process_id,
+            execute=args.execute,
+        )
     raise SystemExit("unknown command")
 
 

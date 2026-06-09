@@ -33,5 +33,29 @@ def processes_dir(root: str | Path, goal_id: str, run_id: str) -> Path:
     return run_dir(root, goal_id, run_id) / "processes"
 
 
+def process_dir(root: str | Path, goal_id: str, run_id: str, process_id: str) -> Path:
+    return processes_dir(root, goal_id, run_id) / process_id
+
+
+def process_metadata_path(root: str | Path, goal_id: str, run_id: str, process_id: str) -> Path:
+    return process_dir(root, goal_id, run_id, process_id) / "process.toml"
+
+
+def legacy_process_path(root: str | Path, goal_id: str, run_id: str, process_id: str) -> Path:
+    return processes_dir(root, goal_id, run_id) / f"{process_id}.toml"
+
+
+def process_flow_path(root: str | Path, goal_id: str, run_id: str, process_id: str) -> Path:
+    return process_dir(root, goal_id, run_id, process_id) / "flow.toml"
+
+
+def process_amendments_path(root: str | Path, goal_id: str, run_id: str, process_id: str) -> Path:
+    return process_dir(root, goal_id, run_id, process_id) / "flow-amendments.jsonl"
+
+
+def mailbox_dir(root: str | Path, goal_id: str, run_id: str, process_id: str) -> Path:
+    return process_dir(root, goal_id, run_id, process_id) / "mailbox"
+
+
 def boards_dir(root: str | Path, goal_id: str, run_id: str) -> Path:
     return run_dir(root, goal_id, run_id) / "boards"

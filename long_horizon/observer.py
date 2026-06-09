@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .logger import append_event
+from .mailbox import send_message
 from .process import create_process
 
 
@@ -44,6 +45,16 @@ def record_intervention(root: str | Path, goal_id: str, run_id: str, observer_id
         {"target_process_id": target_process_id, "delivery_channel": "brief_update", "delivery_result": "recorded", "message": message},
         process_id=observer_id,
         causal_refs=[requested["event_id"]],
+    )
+    send_message(
+        root,
+        goal_id,
+        run_id,
+        observer_id,
+        target_process_id,
+        "observer_intervention",
+        message,
+        causal_refs=[requested["event_id"], delivered["event_id"]],
     )
     from .report import generate_report
 

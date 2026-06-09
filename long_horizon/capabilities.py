@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from .config import derive_profile_label, features_from_operation_mode, responsibility_map
 from .io import read_text, read_toml, write_text, write_toml
 from .paths import lh_root
 from .time import now_iso
@@ -70,6 +71,7 @@ def analyze_target(
             return cached
     detected = _detect(repo)
     mode = _choose_mode(target_agent, detected, operation_mode)
+    feature_settings = features_from_operation_mode(mode)
     data = {
         "analysis": {
             "created_at": now_iso(),
@@ -77,9 +79,12 @@ def analyze_target(
             "fingerprint": fingerprint,
             "target_agent": target_agent,
             "operation_mode": mode,
+            "profile_label": derive_profile_label(feature_settings),
             "input_paths": inputs,
         },
         "features": detected,
+        "feature_settings": feature_settings,
+        "responsibility": responsibility_map(feature_settings, mode),
         "mode": _mode_details(mode, target_agent, detected),
     }
     write_toml(cache, data)
@@ -105,6 +110,8 @@ def write_capability_markdown(root: str | Path, data: dict[str, Any]) -> Path:
     analysis = data.get("analysis", {})
     features = data.get("features", {})
     mode = data.get("mode", {})
+    feature_settings = data.get("feature_settings", {})
+    responsibility = data.get("responsibility", {})
     lines = [
         "# Agent Capability Analysis",
         "",
@@ -112,9 +119,32 @@ def write_capability_markdown(root: str | Path, data: dict[str, Any]) -> Path:
         f"Cache status: `{analysis.get('cache_status', '')}`",
         f"Target agent: `{analysis.get('target_agent', '')}`",
         f"Selected operation mode: `{analysis.get('operation_mode', '')}`",
+        f"Derived feature profile: `{analysis.get('profile_label', '')}`",
         "",
-        "## Detected Features",
+        "## Feature Settings",
     ]
+    for key in sorted(feature_settings):
+        lines.append(f"- `{key}`: `{feature_settings[key]}`")
+    lines.extend(
+        [
+            "",
+            "## Responsibility Map",
+            "",
+            "Template owns:",
+        ]
+    )
+    for item in responsibility.get("template", []):
+        lines.append(f"- {item}")
+    lines.append("")
+    lines.append("Target agent owns:")
+    for item in responsibility.get("target_agent", []):
+        lines.append(f"- {item}")
+    lines.extend(
+        [
+            "",
+            "## Detected Features",
+        ]
+    )
     for key in sorted(features):
         lines.append(f"- `{key}`: `{features[key]}`")
     lines.extend(
@@ -145,12 +175,18 @@ def write_operation_mode_decision(root: str | Path, data: dict[str, Any]) -> Pat
     path = lh_root(root) / "decisions" / "operation-mode.md"
     analysis = data.get("analysis", {})
     mode = data.get("mode", {})
+    feature_settings = data.get("feature_settings", {})
     lines = [
-        "# Operation Mode Decision",
+        "# Feature Settings Decision",
         "",
-        f"Selected mode: `{analysis.get('operation_mode', '')}`",
+        f"Derived profile: `{analysis.get('profile_label', '')}`",
+        f"Compatibility operation mode: `{analysis.get('operation_mode', '')}`",
         f"Target agent: `{analysis.get('target_agent', '')}`",
         f"Fingerprint: `{analysis.get('fingerprint', '')}`",
+        "",
+        "## Feature Settings",
+        "",
+        *(f"- `{key}`: `{feature_settings[key]}`" for key in sorted(feature_settings)),
         "",
         "## Rationale",
         "",
@@ -164,7 +200,7 @@ def write_operation_mode_decision(root: str | Path, data: dict[str, Any]) -> Pat
         "",
         "## Override",
         "",
-        "Set `agent.operation_mode` in `.long-horizon/config.toml` or rerun install/task setup with an explicit operation-mode override.",
+        "Edit `[features]` in `.long-horizon/config.toml` or rerun install/task intake with an explicit compatibility override. Runtime state always enables transition validation and process mailboxes.",
     ]
     write_text(path, "\n".join(lines).rstrip() + "\n")
     return path

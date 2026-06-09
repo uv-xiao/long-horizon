@@ -28,6 +28,8 @@ class V1TemplateUsabilitySystemTests(unittest.TestCase):
 
         config = read_toml(root / ".long-horizon" / "config.toml")
         self.assertEqual(config["agent"]["operation_mode"], "runtime-owned")
+        self.assertTrue(config["features"]["runtime_state"])
+        self.assertTrue(config["features"]["message_mailboxes"])
         self.assertTrue((root / ".long-horizon" / "goals").exists())
         self.assertTrue((root / ".agents" / "skills" / "analyze-target-agent" / "SKILL.md").exists())
         self.assertTrue((root / ".agents" / "skills" / "complete-and-deposit" / "SKILL.md").exists())
@@ -73,7 +75,8 @@ class V1TemplateUsabilitySystemTests(unittest.TestCase):
         config = read_toml(root / ".long-horizon" / "config.toml")
         self.assertEqual(config["agent"]["operation_mode"], "native-agent")
         decision = (root / ".long-horizon" / "decisions" / "operation-mode.md").read_text(encoding="utf-8")
-        self.assertIn("Selected mode: `native-agent`", decision)
+        self.assertIn("Compatibility operation mode: `native-agent`", decision)
+        self.assertIn("Feature Settings", decision)
         task = create_task_setup(root, "Run review-only audit", target_agent="claude-code")
         self.assertEqual(task["operation_mode"], "native-agent")
         self.assertEqual(task["profile"], "review-only")
@@ -103,6 +106,8 @@ class V1TemplateUsabilitySystemTests(unittest.TestCase):
         reports = run_dir(root, "goal-v1-usability", "run-v1-usability") / "reports"
         data = read_json(reports / "report-data.json")
         self.assertEqual(data["operation_mode"], "hybrid")
+        self.assertIn("feature_settings", data)
+        self.assertIn("responsibility_map", data)
         self.assertIn("agent_capabilities", data)
         brief = (reports / "agent-brief.md").read_text(encoding="utf-8")
         self.assertIn("Operation mode: `hybrid`", brief)

@@ -4,6 +4,11 @@ This document defines a completion goal for the v1 template. The purpose is to
 make the long-horizon template usable as a guided phase system, not only as a
 set of Python scripts.
 
+V1 completion note: `docs/v1-completion-upgrade-goal.md` supersedes the older
+operation-mode wording in this document where they differ. Runtime-owned,
+native-agent, and hybrid are now compatibility/profile labels derived from
+small feature settings and a responsibility map.
+
 ## Problem
 
 The current implementation proves durable state, workflow validation, logging,

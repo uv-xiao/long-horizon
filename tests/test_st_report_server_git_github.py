@@ -51,15 +51,10 @@ class ReportServerGitGithubSystemTests(unittest.TestCase):
         self.assertTrue(any(lane["lane_id"] == "process:child-a" for lane in data["timeline"]["lanes"]))
         self.assertTrue(any(message["kind"] == "spawn" and message["to_lane_id"] == "process:child-a" for message in data["timeline"]["messages"]))
         self.assertTrue(any(marker["event_type"] == "check_result" for marker in data["timeline"]["event_markers"]))
-        self.assertTrue((reports / "slides.html").exists())
-        self.assertTrue((reports / "slides-data.json").exists())
-        slides = read_json(reports / "slides-data.json")
-        self.assertEqual(slides["canonical_view"], "progress.html")
-        slides_html = (reports / "slides.html").read_text(encoding="utf-8")
-        self.assertIn("canonical timeline report", slides_html)
-        self.assertIn("progress.html", slides_html)
-        self.assertNotIn('<article id="current-slide"', slides_html)
-        self.assertNotIn("process-map", slides_html)
+        self.assertFalse((reports / "slides.html").exists())
+        self.assertFalse((reports / "slides-data.json").exists())
+        self.assertIn("feature_settings", data)
+        self.assertIn("mailboxes", data)
 
         with ReportServer(root, goal_id, run_id, host="127.0.0.1", port=0) as server:
             base = server.url

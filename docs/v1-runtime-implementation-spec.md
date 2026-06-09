@@ -6,6 +6,12 @@ should treat this file as the primary build guide, with `README.md` as the
 public architecture and `docs/first-version-implementation.md` as the decision
 brief.
 
+V1 completion note: `docs/v1-completion-upgrade-goal.md` supersedes this first
+slice where the two differ. The completed v1 model uses feature settings as the
+source of truth, only `workspace` and `virtual` process kinds, per-process FIFO
+mailboxes, per-process `flow.toml`, and canonical report outputs
+`progress.html`, `progress.md`, and `report-data.json` without slide artifacts.
+
 ## Purpose
 
 Build a minimal but real file-backed runtime that can be installed into a

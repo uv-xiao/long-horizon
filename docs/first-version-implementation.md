@@ -4,6 +4,10 @@ This PR starts the first implementation slice for the long-horizon template.
 
 The target is a minimal file-and-skill based system that works with Codex `/goal` without wrapping it in a competing long-running loop.
 
+V1 completion note: `docs/v1-completion-upgrade-goal.md` supersedes the first
+slice layout where they differ. Current v1 uses per-process `flow.toml`,
+process mailboxes, two process kinds, and no slide report artifacts.
+
 The implementation-ready build contract is [v1-runtime-implementation-spec.md](v1-runtime-implementation-spec.md). Use that file as the concrete guide for package shape, CLI commands, installed layout, data contracts, validators, reporter behavior, comment flow, tests, and acceptance criteria.
 
 ## Goal

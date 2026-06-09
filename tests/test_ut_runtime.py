@@ -11,9 +11,10 @@ from long_horizon.goal import create_goal, create_run
 from long_horizon.install import install
 from long_horizon.io import read_json, read_jsonl, read_toml, write_json, write_toml
 from long_horizon.logger import append_event, append_loose
+from long_horizon.mailbox import ack_message, read_mailbox, send_message
 from long_horizon.observer import create_observer, record_intervention
-from long_horizon.paths import boards_dir, run_dir
-from long_horizon.process import interrupt, resume
+from long_horizon.paths import boards_dir, process_amendments_path, process_flow_path, run_dir
+from long_horizon.process import create_process, interrupt, record_flow_amendment, resume
 from long_horizon.transition import transition
 
 
@@ -64,7 +65,7 @@ class RuntimeUnitTests(unittest.TestCase):
         append_event(root, "goal-1", "run-1", "commands", "check_result", {"check_id": "tests_passed", "status": "passed"})
         self.assertEqual(transition(root, "goal-1", "run-1", "primary", "review")["status"], "applied")
 
-        flow_path = run_dir(root, "goal-1", "run-1") / "flow.snapshot.toml"
+        flow_path = process_flow_path(root, "goal-1", "run-1", "primary")
         flow = read_toml(flow_path)
         for trans in flow["transitions"]:
             if trans["from"] == "review" and trans["to"] == "completed":
@@ -74,6 +75,61 @@ class RuntimeUnitTests(unittest.TestCase):
         self.assertEqual(transition(root, "goal-1", "run-1", "primary", "completed")["status"], "blocked")
         append_event(root, "goal-1", "run-1", "human", "human_comment", {"classification": "approval", "target_refs": ["completed"]})
         self.assertEqual(transition(root, "goal-1", "run-1", "primary", "completed")["status"], "applied")
+
+    def test_process_kind_validation_rejects_non_v1_kinds(self):
+        root = self.make_run()
+        with self.assertRaises(ValueError):
+            create_process(root, "goal-1", "run-1", "external-service", process_kind="external")
+        path = create_process(root, "goal-1", "run-1", "github", role="channel", process_kind="virtual")
+        data = read_toml(path)
+        self.assertEqual(data["process_kind"], "virtual")
+        self.assertEqual(data["workspace_path"], "")
+
+    def test_mailbox_send_deliver_ack_preserves_fifo(self):
+        root = self.make_run()
+        create_process(root, "goal-1", "run-1", "critic", role="critic")
+        first = send_message(root, "goal-1", "run-1", "primary", "critic", "question", "first", requires_ack=True)
+        second = send_message(root, "goal-1", "run-1", "primary", "critic", "question", "second")
+        inbox = read_mailbox(root, "goal-1", "run-1", "critic", "inbox")
+        self.assertEqual([item["message_id"] for item in inbox], [first["message_id"], second["message_id"]])
+        ack = ack_message(root, "goal-1", "run-1", "critic", first["message_id"], body="seen")
+        self.assertEqual(ack["status"], "acknowledged")
+        outbox = read_mailbox(root, "goal-1", "run-1", "primary", "outbox")
+        self.assertEqual(len(outbox), 2)
+
+    def test_mailbox_message_only_satisfies_declared_message_gate(self):
+        root = self.make_run()
+        flow_path = process_flow_path(root, "goal-1", "run-1", "primary")
+        flow = read_toml(flow_path)
+        for trans in flow["transitions"]:
+            if trans["from"] == "understand" and trans["to"] == "implement":
+                trans.pop("requires_artifacts", None)
+                trans["requires_messages"] = ["human_comment"]
+        write_toml(flow_path, flow)
+        blocked = transition(root, "goal-1", "run-1", "primary", "implement")
+        self.assertEqual(blocked["status"], "blocked")
+        self.assertIn("missing message human_comment", blocked["reasons"])
+        create_process(root, "goal-1", "run-1", "human", role="human", process_kind="virtual")
+        send_message(root, "goal-1", "run-1", "human", "primary", "human_comment", "go")
+        self.assertEqual(transition(root, "goal-1", "run-1", "primary", "implement")["status"], "applied")
+
+    def test_dangerous_workflow_amendment_requires_approval(self):
+        root = self.make_run()
+        blocked = record_flow_amendment(root, "goal-1", "run-1", "primary", "primary", "weaken AC", risk_class="acceptance_weakening")
+        self.assertEqual(blocked["status"], "blocked")
+        recorded = record_flow_amendment(
+            root,
+            "goal-1",
+            "run-1",
+            "primary",
+            "primary",
+            "weaken AC",
+            risk_class="acceptance_weakening",
+            approval_refs=["evt_human_approval"],
+        )
+        self.assertEqual(recorded["status"], "recorded")
+        amendments = read_jsonl(process_amendments_path(root, "goal-1", "run-1", "primary"))
+        self.assertEqual(len(amendments), 1)
 
     def test_process_interruption_resume_regenerates_brief(self):
         root = self.make_run()

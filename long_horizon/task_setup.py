@@ -4,7 +4,9 @@ from pathlib import Path
 from typing import Any
 
 from .capabilities import analyze_target, selected_operation_mode
-from .io import ensure_dir, write_text, write_toml
+from .config import load_config
+from .goal import create_goal, create_run
+from .io import ensure_dir, read_text, write_text, write_toml
 from .paths import lh_root
 from .time import now_iso
 
@@ -29,7 +31,9 @@ def create_task_setup(
     operation_mode: str | None = None,
 ) -> dict[str, Any]:
     repo = Path(root).resolve()
-    caps = analyze_target(repo, target_agent=target_agent, operation_mode=operation_mode)
+    installed_config = load_config(repo)
+    configured_mode = installed_config.get("agent", {}).get("operation_mode") if (Path(repo) / ".long-horizon" / "config.toml").exists() else None
+    caps = analyze_target(repo, target_agent=target_agent, operation_mode=operation_mode or configured_mode)
     mode = str(caps.get("analysis", {}).get("operation_mode", selected_operation_mode(repo)))
     task_id = task_id or _next_task_id(repo)
     tdir = lh_root(repo) / "tasks" / task_id
@@ -46,12 +50,60 @@ def create_task_setup(
         "request": {"body": request},
         "phases": {"selected": TASK_PHASES},
     }
+    data["features"] = load_config(repo).get("features", {})
+    write_toml(tdir / "intake.toml", data)
     write_toml(tdir / "setup.toml", data)
+    write_text(tdir / "intake.md", _render_setup(task_id, request, mode, profile, caps))
     write_text(tdir / "setup.md", _render_setup(task_id, request, mode, profile, caps))
     write_text(tdir / "goal-contract.scaffold.md", _render_goal_contract(request, mode, profile))
     write_text(tdir / "flow-plan.md", _render_flow_plan(mode, profile))
     write_text(tdir / "execution-brief.md", _render_execution_brief(mode, profile))
     return {"task_id": task_id, "task_dir": str(tdir), "operation_mode": mode, "profile": profile}
+
+
+def initialize_task(root: str | Path, task_id: str, goal_id: str, run_id: str, contract_text: str | None = None) -> dict[str, Any]:
+    repo = Path(root).resolve()
+    tdir = lh_root(repo) / "tasks" / task_id
+    if not tdir.exists():
+        raise FileNotFoundError(f"missing task intake {task_id}")
+    contract = tdir / "goal-contract.md"
+    if contract_text is None:
+        contract_text = read_text(tdir / "goal-contract.scaffold.md", "# Goal Contract\n")
+    write_text(contract, contract_text)
+    create_goal(repo, goal_id, contract)
+    create_run(repo, goal_id, run_id)
+    init_dir = tdir / "initialization"
+    ensure_dir(init_dir)
+    write_toml(
+        init_dir / "initialization.toml",
+        {
+            "initialization": {
+                "task_id": task_id,
+                "goal_id": goal_id,
+                "run_id": run_id,
+                "created_at": now_iso(),
+            },
+            "features": load_config(repo).get("features", {}),
+            "root_process": {"process_id": "primary", "flow": f".long-horizon/goals/{goal_id}/runs/{run_id}/processes/primary/flow.toml"},
+        },
+    )
+    write_text(
+        init_dir / "initialization.md",
+        "\n".join(
+            [
+                "# Long-Horizon Initialization",
+                "",
+                f"- task_id: `{task_id}`",
+                f"- goal_id: `{goal_id}`",
+                f"- run_id: `{run_id}`",
+                "- root_process: `primary`",
+                "- root_flow: `processes/primary/flow.toml`",
+                "- mailboxes: `processes/primary/mailbox/`",
+                "",
+            ]
+        ),
+    )
+    return {"task_id": task_id, "goal_id": goal_id, "run_id": run_id, "initialization_dir": str(init_dir)}
 
 
 def _next_task_id(root: Path) -> str:
@@ -76,7 +128,7 @@ def _classify_request(request: str) -> str:
 
 def _render_setup(task_id: str, request: str, mode: str, profile: str, caps: dict[str, Any]) -> str:
     feature_lines = "\n".join(f"- `{key}`: `{value}`" for key, value in sorted(caps.get("features", {}).items()))
-    return f"""# Long-Horizon Task Setup
+    return f"""# Long-Horizon Task Intake
 
 Task: `{task_id}`
 Profile: `{profile}`
@@ -96,9 +148,9 @@ Operation mode: `{mode}`
 
 ## Immediate Next Step
 
-Use the goal-contract template to turn the request into stable objective,
-constraints, acceptance criteria, evidence artifacts, evaluator checks, and
-human decision points before execution starts.
+Run Initialization after this intake to create the final goal contract, root
+process, process-local flow, mailboxes, evidence tasks, and first execution
+brief.
 """
 
 

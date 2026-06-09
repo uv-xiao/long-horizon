@@ -65,25 +65,53 @@ The system has three layers:
 
 This avoids overlap. For example, "draft-to-plan", "goal contract", and "user directives" are not separate features; they are parts of the **Goal Contract** phase. "checkpoint", "resume", and "commit policy" are not separate features; they are parts of the **Workspace and Version Control** mechanism.
 
-### Operation modes
+### Feature settings and derived profiles
 
 The installer and task-start phase analyze the target repository and selected
 agent, cache the result in `.long-horizon/agent-capabilities.toml`, and choose
-one operation mode:
+small feature settings as the source of truth:
 
-- **Runtime-owned**: the target agent is weak or manual, so the template owns
-  durable workflow state, transition validation, reports, comments, and
-  recovery briefs.
-- **Native-agent**: the target agent already has loop orchestration, hooks,
-  subagents, review, stop gates, or process/session controls. The template
-  installs prompts, policies, validators, and evidence/report surfaces without
-  duplicating the native loop.
-- **Hybrid**: the target agent owns some orchestration while the template owns
-  durable contracts, flow snapshots, evidence gates, reports, git/worktree
-  handling, or human interaction routing.
+```toml
+[features]
+runtime_state = true
+prompt_templates = true
+transition_validation = true
+message_mailboxes = true
+local_supervisor = false
+native_agent_loop = false
+report_server = true
+github_channel = false
+```
 
-This decision is an artifact, not doctrine. Re-run capability analysis or
-override `agent.operation_mode` when a repo/task needs different behavior.
+When `runtime_state` is enabled, transition validation and process mailboxes
+are enabled too. Broad names such as runtime-owned, native-agent, or hybrid are
+kept only as derived compatibility labels in reports and decision records. The
+feature settings and responsibility map are the durable configuration.
+
+Process kinds are intentionally small:
+
+- **Workspace process**: owns or attaches to a repository directory or git
+  worktree.
+- **Virtual process**: has no workspace and owns state, mailboxes, logs, and
+  adapter metadata. GitHub issue/PR channels and human/comment channels are
+  virtual processes.
+
+Every process owns a current `flow.toml` and FIFO mailbox files:
+
+```text
+.long-horizon/goals/<goal>/runs/<run>/processes/<process-id>/
+  process.toml
+  flow.toml
+  flow-amendments.jsonl
+  mailbox/
+    inbox.jsonl
+    outbox.jsonl
+    ack.jsonl
+```
+
+Child processes receive copied process state at spawn and diverge locally until
+an explicit parent-side join/import adopts selected artifacts, messages, or flow
+changes.
 
 ### Prompt-first usage flow
 
@@ -94,9 +122,11 @@ override `agent.operation_mode` when a repo/task needs different behavior.
    `.long-horizon/install-plan.md`.
 3. Install the mode-aware prompt/runtime surface:
    `python -m long_horizon install --target . --apply`.
-4. Start a task from the human request:
+4. Record task intake from the human request:
    `python -m long_horizon task setup --root . --request "<request>"`.
-5. Follow the installed phase skills in `.agents/skills/`: create the goal
+5. Initialize the goal/run from the intake:
+   `python -m long_horizon task initialize --root . --task-id <task> --goal-id <goal> --run-id <run>`.
+6. Follow the installed phase skills in `.agents/skills/`: create the goal
    contract, assemble the flow, start execution, operate checkpoints/fork-join
    or recovery, and complete/deposit reusable knowledge.
 
@@ -121,7 +151,7 @@ Outputs:
 
 - `.long-horizon/install-plan.md`: what will be added, changed, extended, or left alone.
 - `.long-horizon/agent-capabilities.md`: what the selected agent already provides, such as goal persistence, tool permissions, hooks, subagents, review, or stop conditions.
-- `.long-horizon/config.toml`: selected mechanisms, directories, review policy, logging policy, worktree root, sandbox mode, human notification channel, and disabled options.
+- `.long-horizon/config.toml`: feature settings, directories, review policy, logging policy, worktree root, sandbox mode, human notification channel, and disabled options.
 - `.long-horizon/config-catalog.md`: every configurable policy, current default, allowed alternatives, storage location, validation rule, and helper skill or command for changing it.
 - Installed skills/templates/hooks only after human review of the install plan.
 
@@ -144,7 +174,6 @@ Rules:
   logs/
   memory/
   reports/
-  workflow/
 ```
 
 Evidence:
