@@ -847,7 +847,7 @@ directory and inspect these files:
 ## Coverage Boundaries
 
 The current suite intentionally does not claim to solve every future mechanism.
-Known remaining gaps are tracked in `TODO.md` and summarized in
+Known remaining gaps are tracked in `STATUS.md` and summarized in
 `docs/v1-system-test-coverage.md`:
 
 - artifact retention, eviction, compression, and externalization;

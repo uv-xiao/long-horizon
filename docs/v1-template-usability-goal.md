@@ -1,8 +1,8 @@
-# V2 Template Usability And Agent-Substrate Goal
+# V1 Template Usability And Agent-Substrate Goal
 
-This document defines the next implementation goal after the v1 file-backed
-runtime. The purpose is to make the long-horizon template usable as a guided
-phase system, not only as a set of Python scripts.
+This document defines a completion goal for the v1 template. The purpose is to
+make the long-horizon template usable as a guided phase system, not only as a
+set of Python scripts.
 
 ## Problem
 
@@ -278,8 +278,8 @@ without already knowing this repository's implementation internals.
 
 ## Runtime Changes Needed
 
-The v1 Python runtime remains useful, but v2 must expose it as one possible
-substrate.
+The v1 Python runtime remains useful, but the completed v1 usability layer must
+expose it as one possible substrate.
 
 Required changes:
 
@@ -311,7 +311,7 @@ Required changes:
    when and why to call them.
 8. Post-run adapter/skill promotion, artifact retention, merge-conflict repair,
    and ledger repair are represented as processes or workflow steps in prompts,
-   not merely as hard-coded TODOs.
+   not merely as hard-coded backlog items.
 9. Documentation explains how to choose and override operation mode.
 10. Tests cover at least two target-agent profiles:
     - weak/no-native-orchestration agent -> runtime-owned mode;
@@ -352,4 +352,4 @@ Use focused system tests, not shallow prompt snapshot churn.
 7. Add execution-start and live-operation skills.
 8. Add completion/deposition skill.
 9. Add system tests for weak-agent and strong-agent profiles.
-10. Update README, TODO, changelog, and verification docs.
+10. Update README, STATUS, changelog, and verification docs.

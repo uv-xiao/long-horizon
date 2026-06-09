@@ -12,7 +12,7 @@ from long_horizon.paths import run_dir
 from long_horizon.task_setup import create_task_setup
 
 
-class V2TemplateUsabilitySystemTests(unittest.TestCase):
+class V1TemplateUsabilitySystemTests(unittest.TestCase):
     def make_target(self) -> Path:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
@@ -97,10 +97,10 @@ class V2TemplateUsabilitySystemTests(unittest.TestCase):
         install(root, apply=True, target_agent="codex-goal")
         contract = root / "contract.md"
         contract.write_text("# Contract\n\nGoal: prove operation mode\n", encoding="utf-8")
-        create_goal(root, "goal-v2", contract)
-        create_run(root, "goal-v2", "run-v2")
+        create_goal(root, "goal-v1-usability", contract)
+        create_run(root, "goal-v1-usability", "run-v1-usability")
 
-        reports = run_dir(root, "goal-v2", "run-v2") / "reports"
+        reports = run_dir(root, "goal-v1-usability", "run-v1-usability") / "reports"
         data = read_json(reports / "report-data.json")
         self.assertEqual(data["operation_mode"], "hybrid")
         self.assertIn("agent_capabilities", data)

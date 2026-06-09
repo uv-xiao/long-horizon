@@ -5,7 +5,7 @@ Use this directory for repository-local agent rules, skills, and shared procedur
 ## Required Rules
 
 - Follow the root `AGENTS.md` for public documentation boundaries and template evolution rules.
-- Use `.agents/skills/evolve-long-horizon-template/SKILL.md` before changing template architecture, installable skills, README, changelog, TODO, or maintainer evidence logs.
+- Use `.agents/skills/evolve-long-horizon-template/SKILL.md` before changing template architecture, installable skills, README, changelog, STATUS, or maintainer evidence logs.
 - Use `.agents/rules/github-cli.md` before any GitHub CLI operation.
 
 ## GitHub Workflows

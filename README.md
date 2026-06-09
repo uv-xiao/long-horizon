@@ -38,7 +38,7 @@ The template should be a small long-horizon operating system, not a flat feature
 
 The detailed v1 runtime build contract is [docs/v1-runtime-implementation-spec.md](docs/v1-runtime-implementation-spec.md). Use it when implementing the first version; this README remains the public architecture and product rationale.
 
-The next usability layer is defined in [docs/v2-template-usability-goal.md](docs/v2-template-usability-goal.md). It makes the template prompt-first: target-agent analysis, install planning, task setup, goal contracts, flow assembly, execution start, live operation, completion, and deposition are guided by installable skills and phase templates, with Python commands used as validators/state tools where the selected operation mode needs them.
+The v1 prompt-first usability layer is defined in [docs/v1-template-usability-goal.md](docs/v1-template-usability-goal.md). It makes the template easier to use: target-agent analysis, install planning, task setup, goal contracts, flow assembly, execution start, live operation, completion, and deposition are guided by installable skills and phase templates, with Python commands used as validators/state tools where the selected operation mode needs them.
 
 The core design principle is:
 

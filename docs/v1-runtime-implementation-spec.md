@@ -99,7 +99,7 @@ Acceptance bar:
   and comment import.
 - If an implementation problem appears, exploit practical alternatives to make
   the end-to-end mechanism work instead of stopping at scaffolding. Record
-  intentionally deferred gaps in `TODO.md`.
+  intentionally deferred gaps in `STATUS.md`.
 - The implementation should also provide a persistent human-review demo for
   realistic inspection when the automated tests use temporary directories. The
   v1 demo is the shortest-expression-calculator workflow documented in
@@ -118,7 +118,8 @@ Implementation must align with these public files:
 - `docs/first-version-implementation.md`: first-version decision brief.
 - `docs/v1-runtime-implementation-spec.md`: implementation contract.
 - `templates/.long-horizon/config-catalog.md`: configurable policy catalog.
-- `TODO.md`: known future work that should not be overbuilt in v1.
+- `STATUS.md`: feature ledger covering implemented, partial, planned, and
+  outdated items.
 - `.agents/skills/evolve-long-horizon-template/SKILL.md`: maintainer workflow
   for changing this repository.
 
@@ -147,7 +148,7 @@ V1 must implement this vertical slice:
 - Do not build a hosted dashboard.
 - Do not require Feishu, GitHub webhooks, remote execution, GPUs, or benchmark
   adapters.
-- Do not implement artifact eviction beyond a TODO/config placeholder.
+- Do not implement artifact eviction beyond a status/config placeholder.
 - Do not make Markdown timelines a canonical transition source.
 - Do not optimize reporter outputs for agent token consumption; reporter is
   human-facing. Agent resumption uses the separate adapter brief.
@@ -978,14 +979,15 @@ Artifact event fields:
 - `source_refs`
 - `description`
 
-Large artifact eviction/compression/externalization is a TODO, not required v1.
+Large artifact eviction/compression/externalization is tracked in `STATUS.md`,
+not required v1.
 
 ## Memory And Learned Adapters
 
 V1 should include placeholders/config for learned adapters and memory deposition.
 If a missing adapter is learned during a run, it can be used immediately and
 logged under run artifacts for human review. Promotion into reusable skills or
-memory is future work tracked in `TODO.md`.
+memory is future work tracked in `STATUS.md`.
 
 ## CLI Summary
 
@@ -1027,7 +1029,7 @@ Implement in this order:
 10. Comment inbox import and typed human events.
 11. Local report server, real git worktree child spawning/import, and GitHub
     adapter smoke path.
-12. Docs, TODO gaps, changelog, final verification.
+12. Docs, status gaps, changelog, final verification.
 
 ## Test Requirements
 
@@ -1057,7 +1059,7 @@ The implementation is complete enough when all are true:
     workflow merge artifact under `artifacts/process-merges/`.
 12. The persistent calculator demo can be run for human inspection, including
     Codex-backed child candidate generation when `--use-codex` is enabled.
-13. Tests pass, or any intentionally deferred item is explicit in `TODO.md`.
+13. Tests pass, or any intentionally deferred item is explicit in `STATUS.md`.
 
 ## Commit And Documentation Rules
 

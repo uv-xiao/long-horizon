@@ -1,11 +1,12 @@
-# V2 Template Usability Verification
+# V1 Template Usability Verification
 
-This note maps the v2 usability goal to implementation artifacts and tests.
+This note maps the v1 prompt-first usability goal to implementation artifacts
+and tests.
 
-## What V2 Adds
+## What This V1 Completion Adds
 
-V2 makes the template prompt-first while keeping the v1 runtime available as one
-substrate.
+The v1 completion makes the template prompt-first while keeping the Python
+runtime available as one substrate.
 
 - Target-agent capability analysis is implemented in `long_horizon/capabilities.py`.
 - Operation modes are `runtime-owned`, `native-agent`, and `hybrid`.
@@ -24,7 +25,7 @@ substrate.
 ## Test Commands
 
 ```bash
-python -m unittest tests.test_st_v2_template_usability
+python -m unittest tests.test_st_v1_template_usability
 python -m unittest discover -s tests
 ```
 
