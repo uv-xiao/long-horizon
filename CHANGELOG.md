@@ -4,9 +4,85 @@ This file tracks commit/PR-sized changes while the template evolves. It is not a
 
 ## Current Change
 
+- Added the first external eval example for the calculator task: a repo-local
+  `./tmp/evals/<name>` target repo harness that launches a new yolo Codex
+  session, captures external process logs inside the eval target's goal/run
+  process tree, captures modeled process chat artifacts, verifies the resulting
+  long-horizon artifacts, and documents human review paths under `docs/evals/`.
+- Added a v1 feature completion and alignment goal that treats the newly added
+  runtime modules as provisional until they are integrated through runtime
+  behavior, prompts/skills, durable artifacts, reports, hard system tests, and
+  evidence-backed public documentation.
+- Completed the v1 feature-alignment proof layer with report
+  `mechanism_evidence`, durable GitHub operation failure envelopes,
+  source-backed merge repair records, installed skill completion contracts, and
+  a feature completion audit matrix.
+- Cleaned and aligned public docs after the v1 completion upgrade: absorbed
+  negotiation decisions into `STATUS.md` and the v1 completion goal, removed
+  stale negotiation transcripts from `docs/`, and corrected report docs to
+  reflect the canonical no-slide artifact surface.
+- Completed the remaining STATUS mechanisms with runtime-backed v1 surfaces:
+  local subprocess supervisor, notification channels, evaluation adapters,
+  promotion/deposition writes, artifact retention sidecar, ledger reconciliation,
+  merge-conflict repair, report GUI manifest boundary, and full system coverage.
+- Completed the v1 runtime upgrade around feature settings, two process kinds,
+  per-process FIFO mailboxes, process-local `flow.toml`, task
+  intake/initialization split, full GitHub virtual channel envelopes,
+  deposition/merge-repair skills, slide artifact removal, and hard system tests
+  for the new process/message/report model.
+- Started the first-version implementation PR with an implementation brief and decision list.
+- Resolved the v1 workflow-format decision around enforceable structured state, transition validation, and static HTML timeline reporting.
+- Resolved workflow state ownership: only the transition tool mutates workflow boards.
+- Resolved workflow storage boundaries: stable goal contracts own runs, and mutable state is isolated per run.
+- Resolved flow mutability: each run snapshots the goal-level flow and validates transitions against the snapshot.
+- Resolved artifact immutability: evidence artifacts are append-only, while reports are regenerable derived views.
+- Resolved validation strategy: v1 uses custom Python validators for workflow files instead of JSON Schema as the enforcement boundary.
+- Resolved runtime choice: v1 uses a small Python CLI module exposed through `python -m long_horizon`.
+- Resolved structured file format: v1 uses TOML for editable workflow/config/board state and JSONL for append-only ledgers.
+- Resolved TOML authorship: agents may edit goal-level flow TOML, while transition tooling owns run board TOML.
+- Resolved Codex `/goal` positioning: it is an execution substrate adapter, not the workflow orchestrator.
+- Resolved execution substrate updates: reporters generate `agent-brief.md`; tools do not invoke Codex directly.
+- Added a process model that ties agent sessions, tmux sessions, workspaces, git branches/worktrees, runs, lanes, and `.long-horizon/` files together.
+- Corrected the process model to use copy-on-write `.long-horizon/` state per process/worktree, with parent-side inspect/merge authority and cross-agent adapter guidance.
+- Resolved child spawn snapshot policy: copy full logical `.long-horizon/` state by default for agent learning, exclude only configured unsafe/impractical material, and merge back selected child-produced deltas.
+- Resolved rejected child merge policy: parent state imports compact learning/rejection summaries by default, while full failed artifacts stay in child state unless explicitly imported.
+- Resolved merge context policy: snapshot comparison is recorded as provenance, while actual gates remain merge results, checks, transition validity, and explicit human-risk gates.
+- Resolved configuration policy: implementation defaults remain install/task-time configurable through a complete catalog and helper skills for policy changes.
+- Resolved branch policy: branchless child processes are allowed only for read-only research, inspection, reporting, or evaluation; repository-editing children require branches.
+- Resolved active-run policy changes: they are side artifacts by default and require workflow transitions only when changing contract, gates, evidence, or topology.
+- Resolved child policy propagation: active policy changes do not mutate already-spawned children unless the parent explicitly updates, rebriefs, or respawns them.
+- Resolved parent wait gates: v1 uses flow-declared join conditions before parent advancement.
+- Resolved wait-gate selectors: v1 supports all children, explicit process ids, and lane role selectors, with optional quorum over selected children.
+- Resolved wait-gate completion conditions: v1 supports `completed`, `artifact_present`, `checks_passed`, `cancelled_or_rejected`, and conjunctions of those conditions.
+- Resolved cancelled/rejected wait behavior: cancelled or rejected children satisfy waits only when the flow explicitly allows `cancelled_or_rejected`.
+- Resolved wait-gate quorum semantics: quorum counts selected children satisfying the declared condition set.
+- Closed v1 wait-gate semantics with flow-declared timeout/budget terminal states and parent-side wait evaluation artifacts.
+- Added the v1 process status vocabulary used by wait gates and process events.
+- Resolved watchdog/meta-progress ownership: v1 uses separate observer boards instead of mixing run-health state into task workflow boards.
+- Resolved observer process model: v1 supports both checkpoint observer runs and long-running observer sidecars with explicit observe grants, steer grants, and observer-scoped state writes.
+- Resolved observer steering: observers may steer task processes through explicit steer grants, with append-only intervention records as the source of truth.
+- Resolved observer intervention reporting: reports show compact intervention markers in the main timeline and a detailed intervention lane/table.
+- Corrected observer workspace and brief model: observers usually attach to a task/parent workspace while observing granted targets, and `agent-brief.md` remains one process-filtered schema.
+- Refined reporter authority: source-backed timelines stay canonical, while configured reporter-authored timeline analysis may be written for human review.
+- Added a detailed v1 runtime implementation specification for `/goal`, covering install layout, CLI surface, data contracts, logging, process recovery, reporter playback, comments, tests, and acceptance criteria.
+- Moved the v1 testing and acceptance bar to the top of the implementation specification, emphasizing focused unit tests and hard system tests over shallow helper coverage.
+- Implemented the first Python v1 runtime with installer, config validation, goal/run creation, typed and loose logging, transition validation, process interruption/resume, observer interventions, human report generation, pushed comment import, and focused unit/system tests.
+- Hardened system tests with Humanize v1-style nested builder/reviewer plus fork-join exploration, Humanize v2-style plan/RLCR/alignment workflow, CLI-driven fixed-agent report generation, and completed v1 status-mechanism coverage.
+- Added the v1 local report server, timeline report artifacts, real git worktree child spawning with copied `.long-horizon/` state, parent-side child artifact import and branch merge, GitHub adapter local-auth smoke coverage, and an updated feature-by-feature coverage guide.
+- Added a detailed v1 implementation and verification guide that maps each design mechanism to implementation files, test design, inspected artifacts, and the reason the evidence proves the mechanism.
+- Added workflow merge strategy documentation, parent-side process merge artifacts, and a persistent calculator demo that uses child worktrees, optional Codex candidate generation, shortest-passing selection, branch merge, and durable reports for human inspection.
+- Completed the v1 prompt-first usability layer with target-agent capability analysis, cached operation-mode decisions, runtime-owned/native-agent/hybrid install behavior, phase prompt templates, installable skills, task setup artifacts, and v1 verification coverage.
+- Fixed reporter rendering so report artifacts contain meaningful server-rendered process/event content, embed valid JSON for playback, and reconstruct timeline snapshots from the workflow initial state.
+- Reworked v1 reporting around one canonical Perfetto-like `progress.html` timeline with process lanes, state bars, event markers, inter-process message links, selected-state workflow diagrams, and no slide artifacts.
+- Added initial installable configuration catalog and policy-update skill templates.
+- Narrowed the runtime `.long-horizon/` ignore rule so tracked template fixtures under `templates/` can include `.long-horizon/` content.
+- Resolved v1 reporting views: one static HTML report embeds SVG workflow projection generated from flow snapshot, boards, and transition history.
+- Resolved checkpoint policy: v1 uses transition/report checkpoints internally and configurable git commit rules for tracked repository milestones.
+- Resolved default safety boundaries: v1 defaults to flexible local autonomy, with strict gates for secrets/auth and irreversible/high-risk actions.
+- Resolved adapter learning: learned adapters may be used immediately, logged as append-only artifacts, and revised as usage exposes problems.
 - Added repository maintainer rules for separating public template documentation from private research and review logs.
 - Added a repo-local Codex skill for evolving the long-horizon template without leaking ignored local paths into public files.
 - Moved the temporary brain-simulated design review out of public documentation.
 - Removed raw research acquisition status from the public README.
 - Moved repo-local skills under `.agents/` and added GitHub/PR workflow skills plus local `gh` auth rules.
-- Added `TODO.md` for future template features, starting with adapter learning during long-horizon runs.
+- Added `STATUS.md` as the template feature ledger for implemented v1 mechanisms and verification evidence.

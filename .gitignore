@@ -1,2 +1,4 @@
 tmp/
 .gh/
+/.long-horizon/
+__pycache__/

@@ -36,6 +36,10 @@ Maintainer research logs and downloaded source material are not part of this pub
 
 The template should be a small long-horizon operating system, not a flat feature bundle. Its job is to wrap a capable agent runtime, such as Codex `/goal`, with the missing engineering surfaces: goal negotiation, artifact memory, judgment gates, workspace/version control, logging, human reporting, and knowledge deposition.
 
+The detailed v1 runtime build contract is [docs/v1-runtime-implementation-spec.md](docs/v1-runtime-implementation-spec.md). Use it when implementing the first version; this README remains the public architecture and product rationale.
+
+The v1 prompt-first usability layer is defined in [docs/v1-template-usability-goal.md](docs/v1-template-usability-goal.md). It makes the template easier to use: target-agent analysis, install planning, task setup, goal contracts, flow assembly, execution start, live operation, completion, and deposition are guided by installable skills and phase templates, with Python commands used as validators/state tools where the selected feature settings need them.
+
 The core design principle is:
 
 Generality is in the mechanism; specificity is in the judgment.
@@ -47,7 +51,7 @@ The template should provide stable mechanisms. Each task configures where judgme
 1. **Install into existing repos without pretending the repo is empty.** Installation reads existing agent rules, workflow files, hooks, issue/PR practices, and available agent runtimes, then writes an installation plan for human review before applying changes.
 2. **Support both planned implementation and open exploration.** A refactor task needs a closed plan; a kernel optimization task needs hard constraints plus open candidate search.
 3. **Coordinate with the target agent instead of duplicating it.** If Codex `/goal` already owns persistence and continuation, this template supplies contracts, artifacts, review, versioning, and reports around it. If the target agent lacks a long-loop runtime, the template supplies a stricter prompt/hook loop.
-4. **Keep optional mechanisms zero-overhead.** Reviewers, watchdogs, dashboards, external CLIs, domain packs, sandboxes, and parallel lanes are configured per goal and disabled when not useful.
+4. **Keep optional mechanisms zero-overhead.** Reviewers, checkpoint observers, sidecar observers, dashboards, external CLIs, domain packs, sandboxes, and parallel lanes are configured per goal and disabled when not useful.
 5. **Make progress inspectable.** Every long run leaves typed artifacts, logs, checkpoints, evidence, and a human-readable report.
 6. **Harden judgment boundaries.** The system spends model calls where decisions matter: goal contract, plan convergence, candidate promotion, drift detection, evidence quality, completion, and merge.
 
@@ -61,6 +65,75 @@ The system has three layers:
 
 This avoids overlap. For example, "draft-to-plan", "goal contract", and "user directives" are not separate features; they are parts of the **Goal Contract** phase. "checkpoint", "resume", and "commit policy" are not separate features; they are parts of the **Workspace and Version Control** mechanism.
 
+### Feature settings and derived profiles
+
+The installer and task-start phase analyze the target repository and selected
+agent, cache the result in `.long-horizon/agent-capabilities.toml`, and choose
+small feature settings as the source of truth:
+
+```toml
+[features]
+runtime_state = true
+prompt_templates = true
+transition_validation = true
+message_mailboxes = true
+local_supervisor = false
+native_agent_loop = false
+report_server = true
+github_channel = false
+```
+
+When `runtime_state` is enabled, transition validation and process mailboxes
+are enabled too. Broad names such as runtime-owned, native-agent, or hybrid are
+kept only as derived compatibility labels in reports and decision records. The
+feature settings and responsibility map are the durable configuration.
+
+Process kinds are intentionally small:
+
+- **Workspace process**: owns or attaches to a repository directory or git
+  worktree.
+- **Virtual process**: has no workspace and owns state, mailboxes, logs, and
+  adapter metadata. GitHub issue/PR channels and human/comment channels are
+  virtual processes.
+
+Every process owns a current `flow.toml` and FIFO mailbox files:
+
+```text
+.long-horizon/goals/<goal>/runs/<run>/processes/<process-id>/
+  process.toml
+  flow.toml
+  flow-amendments.jsonl
+  mailbox/
+    inbox.jsonl
+    outbox.jsonl
+    ack.jsonl
+```
+
+Child processes receive copied process state at spawn and diverge locally until
+an explicit parent-side join/import adopts selected artifacts, messages, or flow
+changes.
+
+### Prompt-first usage flow
+
+1. Analyze the target agent and repository:
+   `python -m long_horizon capabilities analyze --root . --target-agent auto`
+2. Review `.long-horizon/agent-capabilities.md`, the generated
+   responsibility/profile decision, and
+   `.long-horizon/install-plan.md`.
+3. Install the mode-aware prompt/runtime surface:
+   `python -m long_horizon install --target . --apply`.
+4. Record task intake from the human request:
+   `python -m long_horizon task setup --root . --request "<request>"`.
+5. Initialize the goal/run from the intake:
+   `python -m long_horizon task initialize --root . --task-id <task> --goal-id <goal> --run-id <run>`.
+6. Follow the installed phase skills in `.agents/skills/`: create the goal
+   contract, assemble the flow, start execution, operate checkpoints/fork-join
+   or recovery, and complete/deposit reusable knowledge.
+
+The installed prompts under `.agents/templates/long-horizon/` are the
+user-facing workflow. Python commands are validator and state tools used by
+those prompts when the selected feature settings need them.
+
 ## Phase layer
 
 ### Phase 0: Installation and capability negotiation
@@ -72,30 +145,35 @@ Inputs:
 - Target repository path.
 - Existing agent files such as `AGENTS.md`, `CLAUDE.md`, `.agents/`, `.claude/`, hooks, issue/PR docs, CI, and local scripts.
 - Target agent runtime: Codex `/goal`, Codex without `/goal`, Claude Code, Humanize, oh-my-pi, or another runner.
-- Human interaction preferences: plain Markdown, CLI prompts, Feishu CLI, GitHub issues/PR comments, generated slides, or a small local dashboard.
+- Human interaction preferences: plain Markdown, CLI prompts, Feishu CLI, GitHub issues/PR comments, a Perfetto-like local report timeline, or a small local dashboard.
 
 Outputs:
 
-- `long-horizon/install-plan.md`: what will be added, changed, extended, or left alone.
-- `long-horizon/agent-capabilities.md`: what the selected agent already provides, such as goal persistence, tool permissions, hooks, subagents, review, or stop conditions.
-- `long-horizon/config.yaml`: selected mechanisms, directories, review policy, logging policy, worktree root, sandbox mode, human notification channel, and disabled options.
+- `.long-horizon/install-plan.md`: what will be added, changed, extended, or left alone.
+- `.long-horizon/agent-capabilities.md`: what the selected agent already provides, such as goal persistence, tool permissions, hooks, subagents, review, or stop conditions.
+- `.long-horizon/config.toml`: feature settings, directories, review policy, logging policy, worktree root, sandbox mode, human notification channel, and disabled options.
+- `.long-horizon/config-catalog.md`: every configurable policy, current default, allowed alternatives, storage location, validation rule, and helper skill or command for changing it.
 - Installed skills/templates/hooks only after human review of the install plan.
 
 Rules:
 
 - The installer should not blindly "avoid overwrite"; it should classify existing rules, propose merge/replace/extend choices, and ask for human approval when the local policy is ambiguous.
+- Defaults are not doctrine. Installation and goal setup can override workspace, branch, snapshot, merge, commit, sandbox, review, reporting, evaluator, and adapter policies when the target repo or task needs different behavior.
+- The configuration catalog should be complete enough that an agent can inspect it, propose a safe policy patch, run validators, and record a decision artifact without rediscovering hidden assumptions.
+- Active-run policy changes are side artifacts by default and require workflow transitions only when they alter goal constraints, human gates, safety boundaries, acceptance evidence, or branch/process topology.
+- Active-run policy changes do not automatically mutate already-spawned children; parents must explicitly push a child update, ask for brief adoption, or respawn the child.
 - The installer creates durable directories for long-horizon memory and logs. Default:
 
 ```text
-long-horizon/
-  config.yaml
+.long-horizon/
+  config.toml
+  config-catalog.md
   install-plan.md
   agent-capabilities.md
   goals/
   logs/
   memory/
   reports/
-  workflow/
 ```
 
 Evidence:
@@ -184,13 +262,15 @@ The workflow specification should be declarative enough to inspect and adapt, ev
 - flow: bounded loops, branches, checks, human gates, parallel lanes;
 - views: human-facing status projection.
 
-For this template, call this a **Goal Flow**. A Goal Flow can be represented as Markdown/YAML initially, with an optional H2-like HTML cartridge later.
+For this template, call this a **Goal Flow**. A Goal Flow can be represented as Markdown/TOML/JSONL initially, with an optional H2-like HTML cartridge later.
 
 Workspace policy:
 
 - Each goal gets a task-owned workspace.
 - Default worktree root is configured during installation, for example `../<repo>-long-horizon-worktrees/`.
-- Each candidate lane gets its own branch/worktree.
+- Each candidate lane that may edit repository files gets its own branch/worktree.
+- Branchless child processes are allowed only for read-only research, inspection, reporting, or evaluation tasks, and that mode must be recorded in process metadata.
+- Parent wait/join gates are declared in the Goal Flow for v1. Selectors are all children, explicit process ids, and lane role selectors. Conditions are `completed`, `artifact_present`, `checks_passed`, `cancelled_or_rejected`, `timed_out`, `budget_exhausted`, or conjunctions such as `artifact_present + checks_passed`; quorum counts selected children satisfying the declared condition set. Non-success terminal states count only when the flow explicitly allows them.
 - A pinned review base is created before the loop starts.
 - Sandbox policy is declared before execution:
   - no sandbox: trusted local repo, fast iteration;
@@ -309,11 +389,10 @@ Purpose: turn a long run into reusable team knowledge and improve the template i
 Reporting:
 
 - Human reports are generated from artifacts, not chat memory.
-- Markdown report is required.
+- Markdown report and one static HTML Perfetto-like timeline are required.
 - Optional presentation adapters:
   - CLI report for terminal;
   - Feishu/GitHub notification;
-  - frontend slides for demos;
   - local dashboard or H2-style view for live workflow state.
 
 Memory:
@@ -358,18 +437,23 @@ Examples:
 Use Humanize H2 terminology as the reference model:
 
 - **Artifact**: immutable schema-tagged output delivered once, such as goal contract, plan, round summary, review verdict, benchmark result.
-- **Board**: mutable state updated during the run, such as goal tracker, loop status, candidate scoreboard, budget state.
+- **Task board**: mutable workflow state updated by transition tooling, such as goal tracker, loop status, and candidate scoreboard.
+- **Observer board**: mutable meta-progress state updated by watchdog/critic tooling, such as drift score, retry pressure, evidence gaps, budget pressure, and run-health alerts.
 
-This can start as Markdown/YAML files:
+This can start as Markdown/TOML/JSONL files:
 
 ```text
-long-horizon/goals/<goal-id>/
+.long-horizon/goals/<goal-id>/
   contract.md
-  flow.yaml
+  flow.toml
   boards/
-    goal-tracker.yaml
-    loop-status.yaml
-    candidate-scoreboard.yaml
+    goal-tracker.toml
+    loop-status.toml
+    candidate-scoreboard.toml
+  observer/
+    run-health.toml
+    watchdog.toml
+    evidence-gaps.toml
   artifacts/
     plans/
     summaries/
@@ -426,6 +510,17 @@ One mechanism owns review, critic, watchdog, and human gates:
 - stop conditions;
 - human modes: watchtower, checkpoint, co-pilot, handoff.
 
+Watchdog and meta-progress use a separate observer board. Task workflow boards answer where the work is in the flow; observer boards answer whether the run is healthy, drifting, looping, under-evidenced, over budget, or repeatedly failing. Reports render both, but the transition tool remains the only owner of task workflow boards.
+
+V1 supports both observer modes:
+
+- **Checkpoint observer runs**: bounded observer processes triggered at configured checkpoints, transitions, reports, or human-requested audits.
+- **Long-running observer sidecars**: tmux-backed observer processes that watch task processes during high-risk or long-running work.
+
+Both modes use explicit observe grants and steer grants. Observers usually attach to a task or parent process workspace/state root rather than getting a separate workspace, but they may observe multiple granted target processes across workspaces. Dedicated observer workspaces are optional for heavy tools, isolation, or multi-workspace monitoring. Observers may read granted state files, ledgers, artifacts, reports, process metadata, git status, and adapter-supported tmux/thread capture. They write observer boards as latest summaries, with append-only watchdog/intervention events as source of truth. Captured LLM text is treated as a signal until verified against files, artifacts, checks, or process metadata.
+
+Observers may steer task processes only through granted input channels such as tmux input, agent thread messages, or regenerated briefs. Every steering action must be recorded as an append-only intervention before or atomically with delivery; observers still cannot mutate task boards or advance workflow state.
+
 Humanize's modes map well:
 
 - **watchtower**: human reads dashboard only;
@@ -454,13 +549,26 @@ Required:
 
 - Markdown progress report.
 - Final report.
+- Main timeline with compact observer intervention markers.
+- Dedicated observer intervention lane/table with target process, trigger evidence, steering message, delivery result, and acknowledgement state.
+- Static HTML Perfetto-like progress timeline for human inspection.
+- Report-data mechanism evidence that maps supervisor, notification, GitHub,
+  evaluation, promotion, retention, ledger recovery, merge repair, and GUI
+  adapter claims to source events and artifacts.
 
 Optional:
 
 - CLI notification.
 - Feishu/GitHub update.
-- frontend slides.
-- local dashboard.
+- local dashboard or hosted view.
+- configured reporter analysis on the timeline for human review.
+
+The reporter does not own canonical task state or append-only event history. It
+may, when configured, write derived timeline annotations, summaries, suspected
+causal links, risk notes, and review questions beside the source-backed
+timeline. Those annotations are reporter-authored analysis for humans to
+accept, reject, or supersede; they do not rewrite ledgers, task boards,
+observer boards, workflow state, or the mechanism-evidence index.
 
 ## Component layer
 
@@ -469,8 +577,11 @@ Initial installable modules:
 ```text
 skills/
   install-long-horizon/       # repo inspection, capability negotiation, install/update plan
+  configure-long-horizon/     # inspect and modify installed policy defaults
+  update-long-horizon-policy/ # active-run policy patch with validation and decision artifact
   goal-contract/              # goal review, constraint/open-search negotiation, K/R/W prompt
-  assemble-flow/              # creates flow.yaml or H2-style cartridge from selected mechanisms
+  assemble-flow/              # creates flow.toml or H2-style cartridge from selected mechanisms
+  observe-workflow/           # checkpoint and sidecar observer processes
   run-loop/                   # fallback loop for agents without native long-goal runtime
   review-critic/              # weak/strong review prompts and full-alignment checks
   audit-completion/           # final requirement-by-requirement audit
@@ -478,12 +589,14 @@ skills/
   memory-curator/             # lesson routing and deposition
 
 templates/
-  config.yaml
+  config.toml
+  config-catalog.md
   install-plan.md
   agent-capabilities.md
   goal/contract.md
-  goal/flow.yaml
-  goal/boards/*.yaml
+  goal/flow.toml
+  goal/boards/*.toml
+  goal/observer/*.toml
   goal/logs/*.md
   reports/progress.md
   reports/final.md
