@@ -19,7 +19,7 @@ class CalculatorCodexEvalHarnessTests(unittest.TestCase):
 
             target = eval_root / "target-repo"
             manifest = json.loads((eval_root / "artifacts" / "eval-manifest.json").read_text(encoding="utf-8"))
-            prompt = (eval_root / "artifacts" / "codex-prompt.md").read_text(encoding="utf-8")
+            prompt = Path(manifest["prompt"]).read_text(encoding="utf-8")
 
             self.assertTrue((target / ".git").exists())
             self.assertTrue((target / "TASK.md").exists())
@@ -28,9 +28,14 @@ class CalculatorCodexEvalHarnessTests(unittest.TestCase):
             self.assertEqual(manifest["target_repo"], str(target))
             self.assertIn("--dangerously-bypass-approvals-and-sandbox", " ".join(manifest["codex_command"]))
             self.assertEqual(manifest["codex_command"][-1], "-")
+            self.assertIn("codex-main", manifest["process_logs"])
+            codex_log = manifest["process_logs"]["codex-main"]
+            self.assertEqual(codex_log["prompt"], str(eval_root / "artifacts" / "process-logs" / "codex-main" / "prompt.md"))
+            self.assertTrue((eval_root / "artifacts" / "process-logs" / "codex-main" / "prompt.md").exists())
             self.assertIn("python -m long_horizon install", prompt)
             self.assertIn("calculator-eval", prompt)
             self.assertIn("mechanism_evidence", prompt)
+            self.assertIn("artifacts/process-chats", prompt)
 
     def test_verify_rejects_prepared_but_unrun_eval(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -42,16 +47,25 @@ class CalculatorCodexEvalHarnessTests(unittest.TestCase):
             self.assertFalse(result["passed"])
             self.assertIn("calculator.py exists", result["failed_checks"])
             self.assertIn("report-data.json exists", result["failed_checks"])
+            self.assertIn("codex-main stdout captured", result["failed_checks"])
+            self.assertIn("process chat artifacts for all processes", result["failed_checks"])
+            self.assertIn("prepare-git-001-init", result["process_logs"])
+            self.assertIn("verify-unittest", result["process_logs"])
+            self.assertIn("verify-git-rev-list", result["process_logs"])
 
     def test_eval_docs_define_external_codex_run_and_review_artifacts(self):
         repo = Path(__file__).resolve().parents[1]
         readme = (repo / "docs" / "evals" / "README.md").read_text(encoding="utf-8")
         calculator = (repo / "docs" / "evals" / "calculator.md").read_text(encoding="utf-8")
         combined = readme + calculator
-        self.assertIn("/tmp/evals", combined)
+        self.assertIn("./tmp/evals", combined)
+        self.assertNotIn(" `/tmp/evals", combined)
+        self.assertNotIn(" /tmp/evals", combined)
         self.assertIn("codex exec", combined)
         self.assertIn("--dangerously-bypass-approvals-and-sandbox", combined)
         self.assertIn("scripts/evals/calculator_codex_eval.py", combined)
+        self.assertIn("process-logs/codex-main", combined)
+        self.assertIn("artifacts/process-chats", combined)
         self.assertIn("report-data.json", combined)
 
     def run_script(self, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:

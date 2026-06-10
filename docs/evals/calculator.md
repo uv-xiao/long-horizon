@@ -1,17 +1,17 @@
 # Calculator Eval
 
 The calculator eval starts from a fresh git repo under
-`/tmp/evals/long-horizon-calculator/target-repo`. A new Codex session is then
-launched inside that target repo with yolo privileges:
+repo-local `./tmp/evals/long-horizon-calculator/target-repo`. A new Codex
+session is then launched inside that target repo with yolo privileges:
 
 ```bash
-python scripts/evals/calculator_codex_eval.py --eval-root /tmp/evals/long-horizon-calculator run --reset
+python scripts/evals/calculator_codex_eval.py run --reset
 ```
 
 The generated command uses:
 
 ```bash
-codex exec --dangerously-bypass-approvals-and-sandbox -C /tmp/evals/long-horizon-calculator/target-repo ...
+codex exec --dangerously-bypass-approvals-and-sandbox -C ./tmp/evals/long-horizon-calculator/target-repo ...
 ```
 
 ## What Codex Must Do
@@ -23,18 +23,19 @@ The prompt instructs Codex to:
    `run-1`;
 3. create candidate and observer processes;
 4. route mailbox messages and observer intervention evidence;
-5. implement `calculator.py`;
-6. run the fixed unittest suite through the evaluation adapter;
-7. create notification and report GUI evidence;
-8. generate `progress.html`, `progress.md`, and `report-data.json`;
-9. commit the final target repo changes.
+5. write per-process chat artifacts under `artifacts/process-chats`;
+6. implement `calculator.py`;
+7. run the fixed unittest suite through the evaluation adapter;
+8. create notification and report GUI evidence;
+9. generate `progress.html`, `progress.md`, and `report-data.json`;
+10. commit the final target repo changes.
 
 ## Verify
 
 Run verification independently:
 
 ```bash
-python scripts/evals/calculator_codex_eval.py --eval-root /tmp/evals/long-horizon-calculator verify
+python scripts/evals/calculator_codex_eval.py verify
 ```
 
 The verifier checks:
@@ -48,6 +49,12 @@ The verifier checks:
   notifications, and report GUI;
 - observer interventions, mailbox messages, and at least three processes are
   present;
+- each modeled process has a markdown transcript under
+  `.long-horizon/goals/calculator-eval/runs/run-1/artifacts/process-chats/`;
+- the external Codex process has captured prompt, command, stdout, stderr, run
+  metadata, and last-message artifacts under `process-logs/codex-main`;
+- prepare-time and verify-time subprocesses have captured command, stdout,
+  stderr, and run metadata under `process-logs/`;
 - the target repo has a final commit after the seed commit.
 
 ## Human Review Artifacts
@@ -55,17 +62,25 @@ The verifier checks:
 Inspect:
 
 ```text
-/tmp/evals/long-horizon-calculator/artifacts/eval-manifest.json
-/tmp/evals/long-horizon-calculator/artifacts/codex-prompt.md
-/tmp/evals/long-horizon-calculator/artifacts/codex-last-message.md
-/tmp/evals/long-horizon-calculator/artifacts/eval-result.json
-/tmp/evals/long-horizon-calculator/target-repo/calculator.py
-/tmp/evals/long-horizon-calculator/target-repo/.long-horizon/goals/calculator-eval/runs/run-1/reports/progress.html
-/tmp/evals/long-horizon-calculator/target-repo/.long-horizon/goals/calculator-eval/runs/run-1/reports/report-data.json
+./tmp/evals/long-horizon-calculator/artifacts/eval-manifest.json
+./tmp/evals/long-horizon-calculator/artifacts/eval-result.json
+./tmp/evals/long-horizon-calculator/artifacts/process-logs/codex-main/prompt.md
+./tmp/evals/long-horizon-calculator/artifacts/process-logs/codex-main/command.json
+./tmp/evals/long-horizon-calculator/artifacts/process-logs/codex-main/stdout.jsonl
+./tmp/evals/long-horizon-calculator/artifacts/process-logs/codex-main/stderr.txt
+./tmp/evals/long-horizon-calculator/artifacts/process-logs/codex-main/run.json
+./tmp/evals/long-horizon-calculator/artifacts/process-logs/codex-main/last-message.md
+./tmp/evals/long-horizon-calculator/artifacts/process-logs/prepare-git-001-init/
+./tmp/evals/long-horizon-calculator/artifacts/process-logs/verify-unittest/
+./tmp/evals/long-horizon-calculator/artifacts/process-logs/verify-git-rev-list/
+./tmp/evals/long-horizon-calculator/target-repo/calculator.py
+./tmp/evals/long-horizon-calculator/target-repo/.long-horizon/goals/calculator-eval/runs/run-1/artifacts/process-chats/
+./tmp/evals/long-horizon-calculator/target-repo/.long-horizon/goals/calculator-eval/runs/run-1/reports/progress.html
+./tmp/evals/long-horizon-calculator/target-repo/.long-horizon/goals/calculator-eval/runs/run-1/reports/report-data.json
 ```
 
 ## Clean
 
 ```bash
-python scripts/evals/calculator_codex_eval.py --eval-root /tmp/evals/long-horizon-calculator clean
+python scripts/evals/calculator_codex_eval.py clean
 ```
