@@ -732,9 +732,9 @@ JSON Schema files may be added later as documentation or editor assistance, but 
 ### Reporter visualization
 
 The reporter should generate Markdown plus one canonical static HTML timeline
-view. `progress.html` is the human report surface. `slides.html`, if present,
-is only a compatibility alias to `progress.html`, not a second diagram system.
-This is a reporting adapter, not the workflow runtime.
+view. Current v1 uses `progress.html`, `progress.md`, and `report-data.json`;
+slide artifacts are no longer generated. This is a reporting adapter, not the
+workflow runtime.
 
 Required generated files:
 

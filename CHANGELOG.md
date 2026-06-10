@@ -4,6 +4,22 @@ This file tracks commit/PR-sized changes while the template evolves. It is not a
 
 ## Current Change
 
+- Added a v1 feature completion and alignment goal that treats the newly added
+  runtime modules as provisional until they are integrated through runtime
+  behavior, prompts/skills, durable artifacts, reports, hard system tests, and
+  evidence-backed public documentation.
+- Completed the v1 feature-alignment proof layer with report
+  `mechanism_evidence`, durable GitHub operation failure envelopes,
+  source-backed merge repair records, installed skill completion contracts, and
+  a feature completion audit matrix.
+- Cleaned and aligned public docs after the v1 completion upgrade: absorbed
+  negotiation decisions into `STATUS.md` and the v1 completion goal, removed
+  stale negotiation transcripts from `docs/`, and corrected report docs to
+  reflect the canonical no-slide artifact surface.
+- Completed the remaining STATUS mechanisms with runtime-backed v1 surfaces:
+  local subprocess supervisor, notification channels, evaluation adapters,
+  promotion/deposition writes, artifact retention sidecar, ledger reconciliation,
+  merge-conflict repair, report GUI manifest boundary, and full system coverage.
 - Completed the v1 runtime upgrade around feature settings, two process kinds,
   per-process FIFO mailboxes, process-local `flow.toml`, task
   intake/initialization split, full GitHub virtual channel envelopes,
@@ -46,13 +62,13 @@ This file tracks commit/PR-sized changes while the template evolves. It is not a
 - Added a detailed v1 runtime implementation specification for `/goal`, covering install layout, CLI surface, data contracts, logging, process recovery, reporter playback, comments, tests, and acceptance criteria.
 - Moved the v1 testing and acceptance bar to the top of the implementation specification, emphasizing focused unit tests and hard system tests over shallow helper coverage.
 - Implemented the first Python v1 runtime with installer, config validation, goal/run creation, typed and loose logging, transition validation, process interruption/resume, observer interventions, human report generation, pushed comment import, and focused unit/system tests.
-- Hardened system tests with Humanize v1-style nested builder/reviewer plus fork-join exploration, Humanize v2-style plan/RLCR/alignment workflow, CLI-driven fixed-agent report generation, and a coverage note for remaining v1 gaps.
+- Hardened system tests with Humanize v1-style nested builder/reviewer plus fork-join exploration, Humanize v2-style plan/RLCR/alignment workflow, CLI-driven fixed-agent report generation, and completed v1 status-mechanism coverage.
 - Added the v1 local report server, timeline report artifacts, real git worktree child spawning with copied `.long-horizon/` state, parent-side child artifact import and branch merge, GitHub adapter local-auth smoke coverage, and an updated feature-by-feature coverage guide.
 - Added a detailed v1 implementation and verification guide that maps each design mechanism to implementation files, test design, inspected artifacts, and the reason the evidence proves the mechanism.
 - Added workflow merge strategy documentation, parent-side process merge artifacts, and a persistent calculator demo that uses child worktrees, optional Codex candidate generation, shortest-passing selection, branch merge, and durable reports for human inspection.
 - Completed the v1 prompt-first usability layer with target-agent capability analysis, cached operation-mode decisions, runtime-owned/native-agent/hybrid install behavior, phase prompt templates, installable skills, task setup artifacts, and v1 verification coverage.
-- Fixed reporter rendering so `progress.html` and `slides.html` contain meaningful server-rendered process/event content, embed valid JSON for playback, and reconstruct timeline snapshots from the workflow initial state.
-- Reworked v1 reporting around one canonical Perfetto-like `progress.html` timeline with process lanes, state bars, event markers, inter-process message links, selected-state workflow diagrams, and compatibility-only slide aliases.
+- Fixed reporter rendering so report artifacts contain meaningful server-rendered process/event content, embed valid JSON for playback, and reconstruct timeline snapshots from the workflow initial state.
+- Reworked v1 reporting around one canonical Perfetto-like `progress.html` timeline with process lanes, state bars, event markers, inter-process message links, selected-state workflow diagrams, and no slide artifacts.
 - Added initial installable configuration catalog and policy-update skill templates.
 - Narrowed the runtime `.long-horizon/` ignore rule so tracked template fixtures under `templates/` can include `.long-horizon/` content.
 - Resolved v1 reporting views: one static HTML report embeds SVG workflow projection generated from flow snapshot, boards, and transition history.
@@ -64,4 +80,4 @@ This file tracks commit/PR-sized changes while the template evolves. It is not a
 - Moved the temporary brain-simulated design review out of public documentation.
 - Removed raw research acquisition status from the public README.
 - Moved repo-local skills under `.agents/` and added GitHub/PR workflow skills plus local `gh` auth rules.
-- Added `STATUS.md` as the template feature ledger for implemented, partial, planned, and outdated items.
+- Added `STATUS.md` as the template feature ledger for implemented v1 mechanisms and verification evidence.

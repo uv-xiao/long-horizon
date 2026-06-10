@@ -9,7 +9,9 @@ The v1 completion makes the template prompt-first while keeping the Python
 runtime available as one substrate.
 
 - Target-agent capability analysis is implemented in `long_horizon/capabilities.py`.
-- Operation modes are `runtime-owned`, `native-agent`, and `hybrid`.
+- Feature settings are the source of truth. `runtime-owned`, `native-agent`,
+  and `hybrid` are compatibility/profile labels derived from settings and the
+  responsibility map.
 - Capability decisions are cached in `.long-horizon/agent-capabilities.toml`
   and explained in `.long-horizon/agent-capabilities.md` plus
   `.long-horizon/decisions/operation-mode.md`.
@@ -21,6 +23,10 @@ runtime available as one substrate.
   `.agents/templates/long-horizon/`.
 - Reports and agent briefs include operation-mode provenance and
   responsibility splits.
+- Installed mechanism skills include purpose, scope, required reads, allowed
+  writes, workflow, produced artifacts, commands, failure handling, completion
+  evidence, and examples, so the Python runtime is not the only way to use the
+  mechanism correctly.
 
 ## Test Commands
 

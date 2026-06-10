@@ -38,7 +38,7 @@ The template should be a small long-horizon operating system, not a flat feature
 
 The detailed v1 runtime build contract is [docs/v1-runtime-implementation-spec.md](docs/v1-runtime-implementation-spec.md). Use it when implementing the first version; this README remains the public architecture and product rationale.
 
-The v1 prompt-first usability layer is defined in [docs/v1-template-usability-goal.md](docs/v1-template-usability-goal.md). It makes the template easier to use: target-agent analysis, install planning, task setup, goal contracts, flow assembly, execution start, live operation, completion, and deposition are guided by installable skills and phase templates, with Python commands used as validators/state tools where the selected operation mode needs them.
+The v1 prompt-first usability layer is defined in [docs/v1-template-usability-goal.md](docs/v1-template-usability-goal.md). It makes the template easier to use: target-agent analysis, install planning, task setup, goal contracts, flow assembly, execution start, live operation, completion, and deposition are guided by installable skills and phase templates, with Python commands used as validators/state tools where the selected feature settings need them.
 
 The core design principle is:
 
@@ -117,8 +117,8 @@ changes.
 
 1. Analyze the target agent and repository:
    `python -m long_horizon capabilities analyze --root . --target-agent auto`
-2. Review `.long-horizon/agent-capabilities.md`,
-   `.long-horizon/decisions/operation-mode.md`, and
+2. Review `.long-horizon/agent-capabilities.md`, the generated
+   responsibility/profile decision, and
    `.long-horizon/install-plan.md`.
 3. Install the mode-aware prompt/runtime surface:
    `python -m long_horizon install --target . --apply`.
@@ -132,7 +132,7 @@ changes.
 
 The installed prompts under `.agents/templates/long-horizon/` are the
 user-facing workflow. Python commands are validator and state tools used by
-those prompts when the selected operation mode needs them.
+those prompts when the selected feature settings need them.
 
 ## Phase layer
 
@@ -552,6 +552,9 @@ Required:
 - Main timeline with compact observer intervention markers.
 - Dedicated observer intervention lane/table with target process, trigger evidence, steering message, delivery result, and acknowledgement state.
 - Static HTML Perfetto-like progress timeline for human inspection.
+- Report-data mechanism evidence that maps supervisor, notification, GitHub,
+  evaluation, promotion, retention, ledger recovery, merge repair, and GUI
+  adapter claims to source events and artifacts.
 
 Optional:
 
@@ -560,7 +563,12 @@ Optional:
 - local dashboard or hosted view.
 - configured reporter analysis on the timeline for human review.
 
-The reporter does not own canonical task state or append-only event history. It may, when configured, write derived timeline annotations, summaries, suspected causal links, risk notes, and review questions beside the source-backed timeline. Those annotations are reporter-authored analysis for humans to accept, reject, or supersede; they do not rewrite ledgers, task boards, observer boards, or workflow state.
+The reporter does not own canonical task state or append-only event history. It
+may, when configured, write derived timeline annotations, summaries, suspected
+causal links, risk notes, and review questions beside the source-backed
+timeline. Those annotations are reporter-authored analysis for humans to
+accept, reject, or supersede; they do not rewrite ledgers, task boards,
+observer boards, workflow state, or the mechanism-evidence index.
 
 ## Component layer
 

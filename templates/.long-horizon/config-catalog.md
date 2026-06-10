@@ -26,7 +26,7 @@ Each policy entry should record:
 - `features.prompt_templates`: whether phase prompt templates are installed and used.
 - `features.transition_validation`: always enabled when `runtime_state` is true.
 - `features.message_mailboxes`: always enabled when `runtime_state` is true; creates per-process FIFO mailboxes.
-- `features.local_supervisor`: optional future runtime supervisor; supervision is config, not a process kind.
+- `features.local_supervisor`: whether local OS subprocess supervision is enabled; supervision is config, not a process kind.
 - `features.native_agent_loop`: whether the selected target agent owns continuation/loop execution.
 - `features.report_server`: whether local report serving is available.
 - `features.github_channel`: whether GitHub issue/PR virtual channel operations are enabled.
@@ -44,6 +44,7 @@ Each policy entry should record:
 - `process.child_policy_update`: whether parent policy changes are pushed explicitly, adopted by regenerated brief, or handled by child respawn.
 - `process.parent_wait_policy`: v1 uses flow-declared wait gates for child states, artifacts, checks, or quorum before parent advancement.
 - `process.status_values`: `active`, `waiting`, `completed`, `cancelled`, `rejected`, `timed_out`, and `budget_exhausted`.
+- `supervisor.restart_policy`: `never` or `on_failure`; supervised processes record PID, command, cwd, stdout/stderr logs, status, and lifecycle events.
 
 ## Copy-On-Write State
 
@@ -107,12 +108,15 @@ Each policy entry should record:
 - `observer.intervention_policy`: append-only records required before or atomically with any observer steering message.
 - `observer.health_fields`: drift score, retry pressure, evidence gaps, budget pressure, loop suspicion, and watchdog alerts.
 - `evaluation.adapters`: benchmark, test, profiler, linter, or domain-specific evaluators.
+- `evaluation.builtin_adapters`: `command`, `file_contains`, and `metric_threshold`.
 - `evaluation.acceptance_evidence`: required evidence for completion.
 
 ## Artifacts, Logs, And Memory
 
 - `artifacts.retention`: keep, compress, archive, externalize, or evict policy.
+- `retention.policy`: current v1 sidecar uses `compress_copy` to preserve source artifacts while writing compressed copies and lineage manifests.
 - `artifacts.large_file_policy`: limits for raw outputs and binary artifacts.
+- `ledger_recovery.mode`: `preserve_and_reconcile`; damaged ledgers are copied, reconciled copies are written separately, and recovery reports preserve provenance.
 - `logging.level`: minimal, normal, verbose, or debug.
 - `memory.deposition`: what becomes reusable memory.
 - `adapters.learned_usage`: whether learned adapters may be used immediately.
@@ -130,12 +134,15 @@ Each policy entry should record:
 - `report.intervention_view`: compact intervention markers in the main timeline plus a detailed observer intervention lane/table.
 - `report.agent_brief_filtering`: one brief schema with process-targeted observer findings and steering instructions, not separate audience-specific brief types by default.
 - `report.timeline_analysis`: whether reporter-authored annotations, causal guesses, risk notes, and review questions may be written beside the source-backed timeline for human review.
+- `report.mechanism_evidence`: typed report-data index from feature mechanisms to source events and artifacts.
+- `report_gui.adapter_boundary`: `report-data-json`; richer GUI adapters consume `report-data.json` and the generated GUI manifest instead of modifying ledgers.
 
 ## GitHub Virtual Channel
 
 - `github.channel_process`: virtual process id for GitHub issue/PR operations.
 - `github.operations`: create/comment/close issue, create/comment/close PR, import issue comments, and import PR comments.
 - `github.auth`: repo-local `.gh/` or `tmp/gh/` only. Missing local auth must produce setup guidance instead of silently using global auth.
+- `github.failure_policy`: failed direct execution is recorded as a durable channel event and operation artifact, then the agent can follow the generated skill brief.
 - `github.agent_skill_fallback`: operation envelopes may generate a strict brief telling the target agent to use installed GitHub skills when direct adapter execution is unavailable.
 
 ## Changing Policy

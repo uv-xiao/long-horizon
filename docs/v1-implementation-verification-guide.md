@@ -22,8 +22,8 @@ The test strategy follows three rules:
 3. **Reports are validated as projections.** Tests do not treat report text as
    source of truth. They inspect canonical files first, then verify that
    `report-data.json` and `progress.html` project those sources correctly.
-   `slides.html`/`slides-data.json`, when present, are checked only as
-   compatibility aliases to the canonical timeline.
+   `slides.html` and `slides-data.json` are asserted absent because current v1
+   has one canonical report surface.
 
 Run all tests with:
 
@@ -61,8 +61,6 @@ The tests validate these file families:
 | `artifacts/snapshots/*.json` | Worktree state-copy provenance | `git_adapter.py` | real worktree system test |
 | `reports/report-data.json` | Deterministic report projection data | `report.py` | report and Humanize tests |
 | `reports/progress.html` | Canonical Perfetto-like timeline report | `report.py` | report tests and server test |
-| `reports/slides-data.json` | Compatibility metadata pointing to the canonical timeline | `report.py` | report-server/git/GitHub test |
-| `reports/slides.html` | Compatibility redirect/link to `progress.html` | `report.py` | report-server/git/GitHub test |
 | `reports/agent-brief.md` | Executor resume/attachment brief | `report.py`, `process.py` | recovery tests |
 | `inbox/comments/*.json` | Pushed human/external comment envelopes | `report_server.py`, adapters, tests | comment tests |
 
@@ -422,11 +420,12 @@ canonical Perfetto-like timeline.
     inter-process message links;
   - `_event_lanes`, `_human_comments`, and `_observer_interventions` build
     backward-compatible summary data;
+  - `_mechanism_evidence` indexes mechanism-specific events and artifacts for
+    supervisor, notifications, GitHub operations, evaluations, promotion,
+    retention, ledger recovery, merge repair, and the report GUI boundary;
   - `render_html` writes `progress.html` with a Perfetto-like timeline, process
     state bars, event markers, message links, selected-state workflow diagram,
-    and inspector;
-  - `build_slides_data` and `render_slides_html` produce compatibility metadata
-    and a redirect/link back to `progress.html`.
+    and inspector.
 
 ### Test Design
 
@@ -440,17 +439,19 @@ canonical Perfetto-like timeline.
   verifies critique, delta card, methodology report, observer intervention, and
   enough snapshots to prove a multi-phase workflow.
 - `test_report_generate_writes_timeline_and_server_imports_pushed_human_comment`
-  verifies canonical timeline files, compatibility-only slide files, process
-  lanes, spawn links, pushed human comment markers, human-comment links, and
+  verifies canonical timeline files, no slide artifacts, process lanes, spawn
+  links, pushed human comment markers, human-comment links, and
   server-refreshed report data.
+- `test_remaining_v1_features_are_runtime_backed_and_reported` verifies
+  `mechanism_evidence` contains events or artifacts for each completed
+  mechanism.
 
 ### Files Opened For Validation
 
 - `reports/progress.html`
 - `reports/progress.md`
 - `reports/report-data.json`
-- `reports/slides.html`
-- `reports/slides-data.json`
+- `reports/report-data.json` `mechanism_evidence`
 - source ledgers under `logs/*.jsonl`
 - source process files under `processes/*.toml`
 - source board file `boards/task.toml`
@@ -460,9 +461,10 @@ canonical Perfetto-like timeline.
 The report is regenerated from canonical state after state-changing operations.
 Tests validate both the deterministic JSON projections and the HTML markers
 needed for human inspection. Timeline lanes, state bars, event markers, and
-message links all derive from the same unified event stream and snapshots, so
-human visual inspection and machine-checkable data stay aligned. Compatibility
-slide files cannot diverge because they only point back to `progress.html`.
+message links all derive from the same unified event stream and snapshots.
+`mechanism_evidence` gives human reviewers a typed index from feature claims to
+source events and artifacts, so visual inspection and machine-checkable data
+stay aligned.
 
 ## Local Report Server
 
@@ -477,7 +479,6 @@ workflow runtime. It serves latest reports and accepts pushed comments.
   - `ReportServer` wraps a `ThreadingHTTPServer`;
   - `GET /` and `GET /progress.html` regenerate and serve `progress.html`;
   - `GET /report-data.json` regenerates and serves report data;
-  - `GET /slides.html` and `GET /slides-data.json` serve compatibility aliases;
   - `POST /comments` writes an inbox envelope, imports it, and regenerates
     reports.
 - `long_horizon/cli.py`
@@ -494,8 +495,6 @@ workflow runtime. It serves latest reports and accepts pushed comments.
 
 - `reports/progress.html`
 - `reports/report-data.json`
-- `reports/slides.html`
-- `reports/slides-data.json`
 - `inbox/comments/*.json`
 - `logs/human.jsonl`
 - `logs/notifications.jsonl`
@@ -638,7 +637,11 @@ by local and server-based ingestion.
   - detects repo-local GitHub CLI auth;
   - refuses silent fallback to unrelated global auth;
   - runs `gh auth status` before `gh repo view`;
-  - writes normalized GitHub comment envelopes to the runtime inbox.
+  - writes normalized GitHub comment envelopes to the runtime inbox;
+  - records issue/PR operation envelopes as artifacts;
+  - routes operation messages through the GitHub virtual process mailbox;
+  - records `github_operation_failed` with setup guidance when direct execution
+    cannot use repo-local auth.
 - `long_horizon/cli.py`
   - exposes `python -m long_horizon github repo-info --root <repo>`.
 
@@ -647,17 +650,91 @@ by local and server-based ingestion.
 - `test_github_adapter_uses_repo_local_auth_and_normalizes_review_comments`
   creates a normalized GitHub comment envelope, writes it to a target run inbox,
   and runs a real `gh repo view` smoke when repo-local auth is available.
+- `test_github_execution_failure_is_durable_channel_evidence` attempts direct
+  execution without repo-local auth and verifies the failure becomes durable
+  channel evidence and report data.
 
 ### Files Opened For Validation
 
 - `inbox/comments/github-<comment-id>.json`
 - current repository metadata returned by `gh repo view`
+- `artifacts/github/*.json`
+- `logs/notifications.jsonl`
+- `reports/report-data.json` `mechanism_evidence.github_operations`
 
 ### Why This Works
 
 The adapter proves the external path at the boundary that matters for v1:
 GitHub comments become the same typed input envelope as all other human
 comments, and GitHub CLI calls do not silently use unrelated credentials.
+When direct execution is unavailable, the failure is still part of the
+workflow's evidence instead of escaping as an unrecorded exception.
+
+## Completed V1 Mechanism Surfaces
+
+### Design Intent
+
+The newly added v1 mechanisms must be complete across runtime behavior,
+agent-facing guidance, durable artifacts, report projection, and hard system
+tests. A Python module or CLI command alone is not sufficient evidence.
+
+### Implementation
+
+- `long_horizon/supervisor.py`
+  - starts, reaps, terminates, and records local subprocess handles.
+- `long_horizon/notification.py`
+  - routes local and GitHub notifications through virtual processes and
+    mailboxes.
+- `long_horizon/evaluation.py`
+  - records command, file, and metric eval outputs as artifacts.
+- `long_horizon/promotion.py`
+  - promotes reviewed skill, rule, memory, and adapter artifacts with rollback
+    records.
+- `long_horizon/retention.py`
+  - compresses artifact copies and writes retention manifests.
+- `long_horizon/ledger_recovery.py`
+  - preserves damaged ledgers and writes reconciled copies.
+- `long_horizon/merge_repair.py`
+  - records source-backed conflict context, proposed patches, eval refs, and
+    approval-gated apply/block evidence.
+- `long_horizon/report_gui.py`
+  - writes the GUI adapter manifest over `report-data.json`.
+- `templates/.agents/skills/*`
+  - installed mechanism skills provide purpose, scope, required reads, allowed
+    writes, workflow, artifacts, commands, failure handling, completion
+    evidence, and examples.
+
+### Test Design
+
+- `test_remaining_v1_features_are_runtime_backed_and_reported`
+  runs each mechanism and verifies durable artifacts/events are projected into
+  `mechanism_evidence`.
+- `test_installable_mechanism_skills_have_completion_contracts`
+  verifies installed skills contain the required operation contract sections.
+- `test_source_backed_merge_repair_records_context_and_eval_evidence`
+  verifies merge repair records source refs, conflict markers, eval refs,
+  source notes, and proposed patch before application.
+- `test_github_execution_failure_is_durable_channel_evidence`
+  verifies GitHub execution failures are durable virtual-channel evidence.
+
+### Files Opened For Validation
+
+- `artifacts/supervisor/`
+- `artifacts/notifications/`
+- `artifacts/github/`
+- `artifacts/evaluations/`
+- `artifacts/deposition/`
+- `artifacts/retention/`
+- `artifacts/ledger-recovery/`
+- `artifacts/merge-repair/`
+- `reports/report-gui-manifest.json`
+- `reports/report-data.json` `mechanism_evidence`
+
+### Why This Works
+
+Each mechanism is exercised through the same run tree as ordinary long-horizon
+work. The report no longer asks reviewers to infer feature completion from
+generic events; it indexes feature-specific evidence directly.
 
 ## CLI Surface
 
@@ -745,7 +822,7 @@ report modules as every other workflow.
 ### Why This Works
 
 The scenario is hard because the parent cannot advance until both forked
-candidates complete. The test checks the blocked partial join and the later
+candidates complete. The test checks the blocked early join and the later
 successful join, proving the wait gate is doing real coordination work.
 
 ## Humanize V2-Style Hard Scenario
@@ -841,18 +918,10 @@ directory and inspect these files:
     - Confirm process lanes, workflow state bars, human/observer event markers,
       inter-process message links, selected-state transition diagram, and
       click-to-inspect details are visible.
-14. `reports/slides.html`, if generated
-    - Confirm it is only a compatibility page pointing to `progress.html`.
 
 ## Coverage Boundaries
 
-The current suite intentionally does not claim to solve every future mechanism.
-Known remaining gaps are tracked in `STATUS.md` and summarized in
-`docs/v1-system-test-coverage.md`:
-
-- artifact retention, eviction, compression, and externalization;
-- ledger repair and reconciliation;
-- remote execution, benchmark, GPU, and task-specific evaluator adapters;
-- git merge conflict remediation, rollback, and retry policy.
-
-These are future mechanisms, not hidden assumptions in the current v1 tests.
+The current suite covers every feature tracked in `STATUS.md`. Domain or
+provider-specific extensions should be implemented as adapters over the
+existing supervisor, evaluation, notification, report GUI, retention, ledger
+recovery, and merge-repair boundaries.

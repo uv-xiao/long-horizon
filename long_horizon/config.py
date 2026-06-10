@@ -33,6 +33,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "observer": {"modes": ["checkpoint", "sidecar"], "workspace_policy": "attach"},
     "report": {"formats": ["html", "markdown"], "timeline_analysis": False, "serve": "optional"},
     "comments": {"ingestion": "push_inbox_primary"},
+    "supervisor": {"enabled": False, "restart_policy": "never"},
+    "notifications": {"channels": ["local", "github"], "default_channel": "local"},
+    "retention": {"policy": "compress_copy", "min_bytes": 1048576},
+    "ledger_recovery": {"mode": "preserve_and_reconcile"},
+    "report_gui": {"adapter_boundary": "report-data-json"},
+    "evaluation": {"adapters": ["command", "file_contains", "metric_threshold"]},
 }
 
 ALLOWED = {
@@ -43,6 +49,11 @@ ALLOWED = {
     ("logging", "mode"): {"typed_plus_loose", "strict_typed", "loose"},
     ("workflow", "waits"): {"flow_declared"},
     ("profile", "label"): {"runtime-heavy", "native-agent-heavy", "mixed", "prompt-only"},
+    ("supervisor", "restart_policy"): {"never", "on_failure"},
+    ("notifications", "default_channel"): {"local", "github"},
+    ("retention", "policy"): {"compress_copy", "archive_copy", "externalize_ref"},
+    ("ledger_recovery", "mode"): {"preserve_and_reconcile"},
+    ("report_gui", "adapter_boundary"): {"report-data-json"},
 }
 
 FEATURE_KEYS = set(DEFAULT_CONFIG["features"])

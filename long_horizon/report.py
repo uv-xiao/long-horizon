@@ -53,6 +53,7 @@ def build_report_data(root: str | Path, goal_id: str, run_id: str) -> dict[str, 
         "mailboxes": mailboxes,
         "mailbox_messages": mailbox_messages,
         "workflow_amendments": amendments,
+        "mechanism_evidence": _mechanism_evidence(rdir, events),
         "events": events,
         "event_lanes": _event_lanes(events),
         "communication_edges": edges,
@@ -148,6 +149,11 @@ def render_markdown(data: dict[str, Any]) -> str:
     lines.extend(["", "## Recent Events"])
     for event in recent:
         lines.append(f"- `{event['event_id']}` `{event['event_type']}` from `{event['process_id']}`")
+    lines.extend(["", "## Mechanism Evidence"])
+    for name, evidence in sorted(data.get("mechanism_evidence", {}).items()):
+        event_count = len(evidence.get("events", []))
+        artifact_count = len(evidence.get("artifacts", []))
+        lines.append(f"- `{name}`: {event_count} events, {artifact_count} artifacts")
     lines.extend(["", "## Report", "", "Open `progress.html` for the timeline report, message links, event details, and selected-state workflow diagram."])
     return "\n".join(lines) + "\n"
 
@@ -883,3 +889,64 @@ def _observer_interventions(events: list[dict[str, Any]]) -> list[dict[str, Any]
                 }
             )
     return interventions
+
+
+def _mechanism_evidence(rdir: Path, events: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    rules = {
+        "supervisor": {
+            "events": {"supervisor_process_started", "supervisor_process_exited", "supervisor_process_terminated"},
+            "artifacts": ["artifacts/supervisor/**/*"],
+        },
+        "notifications": {
+            "events": {"notification_sent", "message_sent", "message_delivered", "message_acknowledged"},
+            "artifacts": ["artifacts/notifications/**/*"],
+        },
+        "github_operations": {
+            "events": {"github_operation_planned", "github_operation_executed", "github_operation_failed"},
+            "artifacts": ["artifacts/github/**/*"],
+        },
+        "evaluations": {
+            "events": {"evaluation_recorded", "evaluation_command_ran"},
+            "artifacts": ["artifacts/evaluations/**/*"],
+        },
+        "promotion": {
+            "events": {"promotion_applied", "promotion_blocked", "deposition_recorded"},
+            "artifacts": ["artifacts/deposition/**/*"],
+        },
+        "retention": {
+            "events": {"artifact_retained"},
+            "artifacts": ["artifacts/retention/**/*"],
+        },
+        "ledger_recovery": {
+            "events": {"ledger_reconciled"},
+            "artifacts": ["artifacts/ledger-recovery/**/*"],
+        },
+        "merge_repair": {
+            "events": {"merge_repair_proposed", "merge_repair_applied", "merge_repair_blocked"},
+            "artifacts": ["artifacts/merge-repair/**/*"],
+        },
+        "report_gui": {
+            "events": {"report_gui_manifest_written"},
+            "artifacts": ["reports/report-gui-manifest.json"],
+        },
+    }
+    evidence: dict[str, dict[str, Any]] = {}
+    for name, rule in rules.items():
+        matched_events = [
+            {
+                "event_id": event.get("event_id", ""),
+                "event_type": event.get("event_type", ""),
+                "ledger": event.get("ledger", ""),
+                "process_id": event.get("process_id", ""),
+                "anchor": event.get("anchor", ""),
+            }
+            for event in events
+            if event.get("event_type") in rule["events"]
+        ]
+        artifacts: list[str] = []
+        for pattern in rule["artifacts"]:
+            for path in sorted(rdir.glob(pattern)):
+                if path.is_file():
+                    artifacts.append(str(path.relative_to(rdir)))
+        evidence[name] = {"events": matched_events, "artifacts": artifacts}
+    return evidence

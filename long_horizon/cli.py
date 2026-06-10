@@ -8,16 +8,24 @@ from . import __version__
 from .capabilities import analyze_target, load_capabilities
 from .comments import import_comments
 from .config import load_config, set_config_value, validate_config
+from .evaluation import run_evaluation
 from .goal import create_goal, create_run
 from .git_adapter import import_child_state, merge_child_branch, spawn_child_worktree
 from .github_adapter import GitHubAdapter, record_github_operation
 from .install import install
+from .ledger_recovery import reconcile_ledger
 from .logger import append_event, append_loose
 from .mailbox import ack_message, read_mailbox, send_message
+from .merge_repair import propose_merge_repair
+from .notification import send_notification
 from .observer import create_observer, record_intervention
 from .process import create_process, heartbeat, interrupt, record_flow_amendment, resume
+from .promotion import promote_artifact
+from .report_gui import write_report_gui_manifest
 from .report import generate_report
 from .report_server import ReportServer
+from .retention import run_retention_sidecar
+from .supervisor import reap_supervised_process, start_supervised_process, supervised_status, terminate_supervised_process
 from .task_setup import create_task_setup, initialize_task
 from .transition import transition
 from .validators import validate_root
@@ -246,6 +254,97 @@ def main(argv: list[str] | None = None) -> int:
     gp.add_argument("--target-process-id", default="primary")
     gp.add_argument("--execute", action="store_true")
 
+    p = sub.add_parser("supervisor")
+    ssub = p.add_subparsers(dest="supervisor_cmd", required=True)
+    sp = ssub.add_parser("start")
+    sp.add_argument("--root", required=True)
+    sp.add_argument("--goal-id", required=True)
+    sp.add_argument("--run-id", required=True)
+    sp.add_argument("--process-id", required=True)
+    sp.add_argument("--command", required=True)
+    sp.add_argument("--cwd")
+    sp.add_argument("--role", default="task")
+    sp.add_argument("--restart-policy", choices=["never", "on_failure"], default="never")
+    for name in ["status", "reap", "terminate"]:
+        sp = ssub.add_parser(name)
+        sp.add_argument("--root", required=True)
+        sp.add_argument("--goal-id", required=True)
+        sp.add_argument("--run-id", required=True)
+        sp.add_argument("--process-id", required=True)
+
+    p = sub.add_parser("notify")
+    p.add_argument("--root", required=True)
+    p.add_argument("--goal-id", required=True)
+    p.add_argument("--run-id", required=True)
+    p.add_argument("--channel", choices=["local", "github"], required=True)
+    p.add_argument("--subject", required=True)
+    p.add_argument("--body", required=True)
+    p.add_argument("--target-process-id", default="primary")
+    p.add_argument("--github-target", choices=["issue", "pr"], default="issue")
+    p.add_argument("--number", type=int)
+    p.add_argument("--execute", action="store_true")
+
+    p = sub.add_parser("evaluation")
+    esub = p.add_subparsers(dest="evaluation_cmd", required=True)
+    ep = esub.add_parser("run")
+    ep.add_argument("--root", required=True)
+    ep.add_argument("--goal-id", required=True)
+    ep.add_argument("--run-id", required=True)
+    ep.add_argument("--eval-id", required=True)
+    ep.add_argument("--adapter", choices=["command", "file_contains", "metric_threshold"], required=True)
+    ep.add_argument("--process-id", default="primary")
+    ep.add_argument("--command")
+    ep.add_argument("--file-path")
+    ep.add_argument("--contains")
+    ep.add_argument("--metric-name")
+    ep.add_argument("--metric-value", type=float)
+    ep.add_argument("--threshold", type=float)
+
+    p = sub.add_parser("promote")
+    p.add_argument("--root", required=True)
+    p.add_argument("--goal-id", required=True)
+    p.add_argument("--run-id", required=True)
+    p.add_argument("--kind", choices=["skill", "rule", "memory", "adapter"], required=True)
+    p.add_argument("--name", required=True)
+    p.add_argument("--source-artifact", required=True)
+    p.add_argument("--process-id", default="primary")
+    p.add_argument("--approval-ref", action="append", default=[])
+    p.add_argument("--risk-class", default="normal")
+
+    p = sub.add_parser("retention")
+    rsub = p.add_subparsers(dest="retention_cmd", required=True)
+    rp = rsub.add_parser("run")
+    rp.add_argument("--root", required=True)
+    rp.add_argument("--goal-id", required=True)
+    rp.add_argument("--run-id", required=True)
+    rp.add_argument("--min-bytes", type=int, default=1)
+    rp.add_argument("--process-id", default="retention")
+
+    p = sub.add_parser("ledger")
+    lsub = p.add_subparsers(dest="ledger_cmd", required=True)
+    lp = lsub.add_parser("reconcile")
+    lp.add_argument("--root", required=True)
+    lp.add_argument("--goal-id", required=True)
+    lp.add_argument("--run-id", required=True)
+    lp.add_argument("--ledger", required=True)
+    lp.add_argument("--process-id", default="ledger-recovery")
+
+    p = sub.add_parser("merge-repair")
+    p.add_argument("--root", required=True)
+    p.add_argument("--goal-id", required=True)
+    p.add_argument("--run-id", required=True)
+    p.add_argument("--conflict-file", required=True)
+    p.add_argument("--process-id", default="merge-repair")
+    p.add_argument("--strategy", choices=["keep_both", "ours", "theirs"], default="keep_both")
+    p.add_argument("--approval-ref", action="append", default=[])
+    p.add_argument("--apply", action="store_true")
+
+    p = sub.add_parser("report-gui")
+    p.add_argument("--root", required=True)
+    p.add_argument("--goal-id", required=True)
+    p.add_argument("--run-id", required=True)
+    p.add_argument("--adapter", default="static-html")
+
     args = parser.parse_args(argv)
     result = _dispatch(args)
     if result is not None:
@@ -388,6 +487,42 @@ def _dispatch(args: argparse.Namespace):
             target_process_id=args.target_process_id,
             execute=args.execute,
         )
+    if args.cmd == "supervisor":
+        if args.supervisor_cmd == "start":
+            return start_supervised_process(args.root, args.goal_id, args.run_id, args.process_id, args.command, cwd=args.cwd, role=args.role, restart_policy=args.restart_policy)
+        if args.supervisor_cmd == "status":
+            return supervised_status(args.root, args.goal_id, args.run_id, args.process_id)
+        if args.supervisor_cmd == "reap":
+            return reap_supervised_process(args.root, args.goal_id, args.run_id, args.process_id)
+        if args.supervisor_cmd == "terminate":
+            return terminate_supervised_process(args.root, args.goal_id, args.run_id, args.process_id)
+    if args.cmd == "notify":
+        return send_notification(args.root, args.goal_id, args.run_id, args.channel, args.subject, args.body, target_process_id=args.target_process_id, github_target=args.github_target, number=args.number, execute=args.execute)
+    if args.cmd == "evaluation" and args.evaluation_cmd == "run":
+        return run_evaluation(
+            args.root,
+            args.goal_id,
+            args.run_id,
+            args.eval_id,
+            args.adapter,
+            process_id=args.process_id,
+            command=args.command,
+            file_path=args.file_path,
+            contains=args.contains,
+            metric_name=args.metric_name,
+            metric_value=args.metric_value,
+            threshold=args.threshold,
+        )
+    if args.cmd == "promote":
+        return promote_artifact(args.root, args.goal_id, args.run_id, args.kind, args.name, args.source_artifact, process_id=args.process_id, approval_refs=args.approval_ref, risk_class=args.risk_class)
+    if args.cmd == "retention" and args.retention_cmd == "run":
+        return run_retention_sidecar(args.root, args.goal_id, args.run_id, min_bytes=args.min_bytes, process_id=args.process_id)
+    if args.cmd == "ledger" and args.ledger_cmd == "reconcile":
+        return reconcile_ledger(args.root, args.goal_id, args.run_id, args.ledger, process_id=args.process_id)
+    if args.cmd == "merge-repair":
+        return propose_merge_repair(args.root, args.goal_id, args.run_id, args.conflict_file, process_id=args.process_id, strategy=args.strategy, approval_refs=args.approval_ref, apply=args.apply)
+    if args.cmd == "report-gui":
+        return write_report_gui_manifest(args.root, args.goal_id, args.run_id, adapter=args.adapter)
     raise SystemExit("unknown command")
 
 

@@ -159,7 +159,8 @@ The installer should propose:
 - which skills/templates/hooks/rules will be added;
 - which existing files will be extended;
 - which native agent features should be enabled instead of duplicated;
-- which runtime files are required for the selected operation mode;
+- which runtime files are required by the selected feature settings and
+  derived responsibility profile;
 - what is disabled and why.
 
 Human approval is required before modifying existing agent-facing files when
@@ -174,7 +175,7 @@ It should produce:
 
 - task profile: planned implementation, open exploration, benchmark loop,
   research, debugging, review-only, or maintenance;
-- operation-mode confirmation or override;
+- feature-setting and responsibility-profile confirmation or override;
 - selected phase templates;
 - required artifacts and gates;
 - expected process topology;
@@ -232,7 +233,7 @@ Provide prompt templates for:
 - policy change during an active run.
 
 These prompts should call validators and runtime commands only where the
-selected operation mode needs them.
+selected feature settings need them.
 
 ### Phase 7: Completion And Deposition
 

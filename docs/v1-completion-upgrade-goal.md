@@ -1,7 +1,8 @@
 # V1 Completion Upgrade Goal
 
 This document is the implementation-facing goal for completing v1 after the
-review rounds captured in `docs/v1-upgrade-negotiation-r3.md`.
+review rounds on feature settings, process kinds, process mailboxes,
+per-process workflow state, GitHub channels, reports, and deposition.
 
 It supersedes the older mode/version/message-thread ideas for the next
 implementation slice. Keep v1 as the product line. Do not rename this work into
@@ -33,7 +34,6 @@ Read these first:
 - `STATUS.md`
 - `docs/v1-runtime-implementation-spec.md`
 - `docs/v1-template-usability-goal.md`
-- `docs/v1-upgrade-negotiation-r3.md`
 - `templates/.long-horizon/config-catalog.md`
 - `.agents/skills/evolve-long-horizon-template/SKILL.md`
 - `.agents/skills/git-commit/SKILL.md`
@@ -111,7 +111,7 @@ Required behavior:
 - FIFO order is per target inbox;
 - delivery is async;
 - mailboxes are file-backed when `local_supervisor = false`;
-- a future supervisor may use in-memory queues only if it still flushes durable
+- a supervisor may use in-memory queues only if it still flushes durable
   JSONL records;
 - reports must include mailbox data and communication links.
 
@@ -246,8 +246,8 @@ Reports must include:
 - child spawn/join/import evidence;
 - dangerous-action approval evidence when present.
 
-The current report UI may remain plain. Add explicit future status notes that a
-richer GUI adapter can later render the same `report-data.json`.
+The current report UI may remain plain. The report GUI manifest records the
+adapter boundary so richer GUI adapters can render the same `report-data.json`.
 
 ## Implementation Tasks
 
@@ -444,15 +444,15 @@ Required system tests:
     - verify completion fails if any required artifact, mailbox event, approval,
       or eval evidence is removed.
 
-Acceptance requires the tests above to pass or any intentionally deferred gap to
-be explicitly recorded in `STATUS.md` with rationale and a follow-up path.
+Acceptance requires the tests above to pass and `STATUS.md` to map every v1
+feature to implementation and verification evidence.
 
 ## Documentation Updates
 
 Update public docs after implementation:
 
 - `README.md`: structured v1 design by phase, mechanism, and component.
-- `STATUS.md`: implemented, partial, planned, and outdated items.
+- `STATUS.md`: implemented v1 mechanisms and verification evidence.
 - `templates/.long-horizon/config-catalog.md`: feature settings and
   configuration skills.
 - `CHANGELOG.md`: commit/PR-sized public design and implementation changes.
@@ -464,8 +464,7 @@ review logs in public docs.
 
 The upgrade is complete only when:
 
-- implementation tasks are done or explicitly recorded as deferred in
-  `STATUS.md`;
+- implementation tasks are done and mapped to evidence in `STATUS.md`;
 - all required tests pass;
 - reports are generated without slide artifacts;
 - GitHub channel behavior is tested with fixed inputs and local auth failure
@@ -478,8 +477,8 @@ The upgrade is complete only when:
 ```text
 Implement the v1 completion upgrade for this repo.
 
-Repo: /home/uvxiao/long-horizon
-Branch: feat/first-version-implementation
+Repo: <path-to-long-horizon-repo>
+Branch: <implementation-branch>
 
 Strict source of truth:
 - docs/v1-completion-upgrade-goal.md
@@ -489,7 +488,6 @@ Read first:
 - docs/v1-completion-upgrade-goal.md
 - docs/v1-runtime-implementation-spec.md
 - docs/v1-template-usability-goal.md
-- docs/v1-upgrade-negotiation-r3.md
 - README.md
 - STATUS.md
 - templates/.long-horizon/config-catalog.md
@@ -501,7 +499,7 @@ Rules:
 - Follow docs/v1-completion-upgrade-goal.md strictly.
 - If older docs conflict with the goal doc, the goal doc wins.
 - If blocked, exploit practical alternatives that preserve the architecture and
-  make the end-to-end mechanism work. Record intentional gaps in STATUS.md.
+  make the end-to-end mechanism work.
 - Do not mention ignored local scratch paths in public docs.
 - Update CHANGELOG.md.
 
@@ -519,6 +517,5 @@ Testing bar:
 Finish:
 - Run tests and a useful demo CLI flow.
 - Commit cleanly and push.
-- Final response: capabilities implemented, test results, deferred STATUS
-  items, commit hash.
+- Final response: capabilities implemented, test results, commit hash.
 ```

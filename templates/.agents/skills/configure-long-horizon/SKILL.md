@@ -5,7 +5,30 @@ description: Use when installing or updating long-horizon policy defaults for a 
 
 # Configure Long-Horizon
 
+## Purpose
+
 Use this skill to inspect and modify installed long-horizon defaults. These defaults live outside any one active run and guide future goals unless a run overrides them.
+
+## Scope
+
+Configure feature settings, runtime/native-agent responsibility, workspace,
+branch, snapshot, merge, commit, sandbox, review, reporting, evaluator,
+notification, retention, recovery, and adapter behavior.
+
+## Required Reads
+
+- `.long-horizon/config.toml`
+- `.long-horizon/config-catalog.md`
+- `.long-horizon/agent-capabilities.md`
+- repository agent rules
+- active policy decision artifacts when present
+
+## Allowed Writes
+
+- `.long-horizon/config.toml`
+- `.long-horizon/config-catalog.md` when policy docs change
+- `.long-horizon/memory/policy-decisions/`
+- proposed active-run policy artifacts
 
 ## Workflow
 
@@ -33,3 +56,32 @@ Report:
 - validation run;
 - affected future goals;
 - any active runs that need a separate `update-long-horizon-policy` decision.
+
+## Produced Artifacts
+
+- config patch;
+- policy decision artifact;
+- validation output;
+- rollback note.
+
+## Commands
+
+Use runtime validators and report generation when available. Use repository
+tests when the config change affects execution behavior.
+
+## Failure Handling
+
+Stop and ask for human approval when the change weakens secrets/auth,
+destructive-git, irreversible-action, human-gate, or acceptance criteria
+policy. Record blocked decisions instead of silently mutating config.
+
+## Completion Evidence
+
+The config change is present, the decision artifact explains the reason and
+rollback, validation passed or is explicitly blocked, and affected runs are
+identified.
+
+## Example
+
+Enable GitHub notification channels only after the target repo has local
+GitHub CLI auth configured and the decision artifact records the fallback path.

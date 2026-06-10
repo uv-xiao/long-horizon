@@ -13,6 +13,7 @@ For a more detailed design-to-implementation proof chain, see
   - `python -m unittest tests.test_st_humanize_flows`
   - `python -m unittest tests.test_st_report_server_git_github`
   - `python -m unittest tests.test_st_cli_report_runtime`
+  - `python -m unittest tests.test_st_v1_status_completion`
 
 ## Feature Coverage
 
@@ -66,8 +67,7 @@ For a more detailed design-to-implementation proof chain, see
   - Covered by every system test that calls `generate_report`, with stronger
     checks in `test_report_generate_writes_timeline_and_server_imports_pushed_human_comment`.
   - Validates `report-data.json`, `progress.md`, and `progress.html`.
-  - `slides.html`/`slides-data.json`, when present, are compatibility aliases
-    to the canonical timeline and are not separate visualizations.
+  - Validates that `slides.html` and `slides-data.json` are not generated.
   - `report-data.json` must include event-sequence playback, snapshots, timeline
     lanes, process state segments, event markers, inter-process message links,
     workflow transition data, comments, observer interventions, and stable
@@ -79,9 +79,9 @@ For a more detailed design-to-implementation proof chain, see
 - **Local report server**
   - Covered by
     `test_report_generate_writes_timeline_and_server_imports_pushed_human_comment`.
-  - Validates serving `progress.html`, `report-data.json`, compatibility
-    `slides.html`/`slides-data.json`, and push-style `POST /comments` ingestion
-    that imports human comments immediately and regenerates reports.
+  - Validates serving `progress.html` and `report-data.json`, rejecting removed
+    slide artifacts, and push-style `POST /comments` ingestion that imports
+    human comments immediately and regenerates reports.
 
 - **Real git worktree process model**
   - Covered by
@@ -109,10 +109,14 @@ For a more detailed design-to-implementation proof chain, see
     selected results.
 
 - **GitHub adapter**
-  - Covered by `test_github_adapter_uses_repo_local_auth_and_normalizes_review_comments`.
+  - Covered by `test_github_adapter_uses_repo_local_auth_and_normalizes_review_comments`,
+    `test_dangerous_approval_full_github_channel_and_auth_failure_guidance`,
+    and `test_github_execution_failure_is_durable_channel_evidence`.
   - Validates repo-local auth detection, no silent global auth fallback,
-    normalized GitHub comment envelope writing, and a real `gh repo view` smoke
-    when repo-local auth is available.
+    normalized GitHub comment envelope writing, issue/PR operation envelopes,
+    operation artifacts, mailbox routing, skill-brief fallback, durable
+    `github_operation_failed` events, and a real `gh repo view` smoke when
+    repo-local auth is available.
 
 - **CLI usability**
   - Covered by `test_cli_driven_agent_mimic_generates_complete_playback_report`.
@@ -126,7 +130,34 @@ For a more detailed design-to-implementation proof chain, see
     child language candidates, optional real `codex exec` candidate generation,
     observer steering, local human approvals, imported child artifacts,
     shortest-passing selection, child branch merge, merge artifacts, and
-    generated reports that remain available for manual inspection.
+  generated reports that remain available for manual inspection.
+
+- **Completed v1 status mechanisms**
+  - Covered by `test_remaining_v1_features_are_runtime_backed_and_reported`.
+  - Validates real local subprocess supervision, local and GitHub notification
+    channels, command/file/metric evaluation adapters, skill/rule/memory/adapter
+    promotion, artifact retention compression, ledger reconciliation,
+    merge-conflict repair with approval gating, and report GUI adapter manifest
+    generation.
+  - Validates that each mechanism writes durable artifacts and append-only
+    ledger events that are visible through `report-data.json`
+    `mechanism_evidence`.
+  - `test_source_backed_merge_repair_records_context_and_eval_evidence`
+    validates merge repair source context: base, parent, child, merge failure
+    event, conflict markers, eval refs, source notes, and proposed patch before
+    application.
+  - `test_github_execution_failure_is_durable_channel_evidence` validates that
+    missing repo-local GitHub auth is logged as channel evidence instead of
+    raising out of the workflow.
+
+- **Installable skills and configuration surface**
+  - Covered by `test_installable_skills_and_config_surface_cover_status_features`
+    and `test_installable_mechanism_skills_have_completion_contracts`.
+  - Validates installed capability/configuration/install/promotion/repair
+    skills, feature settings in report data, and the required skill contract
+    sections: purpose, scope, required reads, allowed writes, workflow,
+    produced artifacts, commands, failure handling, completion evidence, and
+    examples.
 
 ## Human Review Guide
 
@@ -145,12 +176,28 @@ artifacts are:
   worktree state-copy provenance.
 - `.long-horizon/goals/<goal-id>/runs/<run-id>/artifacts/imports/` for
   parent-imported child results.
+- `.long-horizon/goals/<goal-id>/runs/<run-id>/artifacts/supervisor/` for
+  supervised process handles and stdout/stderr logs.
+- `.long-horizon/goals/<goal-id>/runs/<run-id>/artifacts/notifications/` for
+  notification channel envelopes.
+- `.long-horizon/goals/<goal-id>/runs/<run-id>/artifacts/evaluations/` for
+  evaluation adapter outputs.
+- `.long-horizon/goals/<goal-id>/runs/<run-id>/artifacts/deposition/` for
+  promotion review records.
+- `.long-horizon/goals/<goal-id>/runs/<run-id>/artifacts/retention/` for
+  compressed artifact copies and retention manifests.
+- `.long-horizon/goals/<goal-id>/runs/<run-id>/artifacts/ledger-recovery/` for
+  damaged-ledger copies, reconciled ledgers, and reconciliation reports.
+- `.long-horizon/goals/<goal-id>/runs/<run-id>/artifacts/merge-repair/` for
+  proposed conflict repairs and approval-gated application records.
 - `.long-horizon/goals/<goal-id>/runs/<run-id>/reports/progress.html` for the
   canonical Perfetto-like timeline.
 - `.long-horizon/goals/<goal-id>/runs/<run-id>/reports/report-data.json` for
-  deterministic machine-checkable report data.
-- `.long-horizon/goals/<goal-id>/runs/<run-id>/reports/slides.html`, if present,
-  only to confirm old links route back to `progress.html`.
+  deterministic machine-checkable report data, including `mechanism_evidence`
+  for supervisor, notifications, GitHub operations, evaluations, promotion,
+  retention, ledger recovery, merge repair, and report GUI boundary evidence.
+- `.long-horizon/goals/<goal-id>/runs/<run-id>/reports/report-gui-manifest.json`
+  for the GUI adapter boundary.
 
 For visual acceptance, open `progress.html`. The timeline should reveal child
 process lanes, observer/task lanes, workflow state bars, human comment markers,
@@ -172,21 +219,11 @@ Then open the paths printed by `status`. Clean them with:
 python scripts/persistent_calculator_demo.py clean
 ```
 
-## Remaining Deferred Features
+## Completion Boundary
 
-- **Real process supervisor**: v1 records durable logical process state, but
-  does not yet keep task, observer, reporter, retention, recovery, and other
-  meta-processes alive as supervised OS processes or adapter-backed handles.
-- **Artifact retention/eviction/compression/externalization sidecar**:
-  explicitly deferred until large real task artifacts need lifecycle policy.
-- **Ledger repair/reconciliation recovery process**: hash-chain append behavior
-  is covered, but explicit repair and reconciliation processes are not
-  implemented.
-- **Richer report GUI**: the v1 HTML/SVG reporter is only the current
-  human-inspection projection. Future versions should evaluate OMP/oh-my-pi,
-  Warp-style, or custom GUI adapters over the same `report-data.json` model.
-- **Remote execution, benchmark, GPU, and task-specific evaluator adapters**:
-  intentionally outside the default v1 runtime.
-- **Git merge conflict remediation workflow**: clean child branch merge is
-  covered, but conflict-resolution, rollback, retry policy, and merge-quality
-  evals remain future workflow mechanisms.
+V1 now has implemented mechanisms for every feature tracked in `STATUS.md`:
+runtime behavior, installed prompt/skill guidance where user-facing, durable
+artifacts or ledgers, report projection, and system-test evidence. Domain-
+specific evaluator packs, remote execution providers, or third-party GUI
+frontends can be added as adapters over the implemented evaluation, supervisor,
+notification, and report-data boundaries without changing the v1 ledger model.
