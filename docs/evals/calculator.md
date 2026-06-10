@@ -1,8 +1,8 @@
 # Calculator Eval
 
 The calculator eval starts from a fresh git repo under
-repo-local `./tmp/evals/long-horizon-calculator/target-repo`. A new Codex
-session is then launched inside that target repo with yolo privileges:
+repo-local `./tmp/evals/long-horizon-calculator`. A new Codex session is then
+launched inside that target repo with yolo privileges:
 
 ```bash
 python scripts/evals/calculator_codex_eval.py run --reset
@@ -11,7 +11,7 @@ python scripts/evals/calculator_codex_eval.py run --reset
 The generated command uses:
 
 ```bash
-codex exec --dangerously-bypass-approvals-and-sandbox -C ./tmp/evals/long-horizon-calculator/target-repo ...
+codex exec --dangerously-bypass-approvals-and-sandbox -C ./tmp/evals/long-horizon-calculator ...
 ```
 
 ## What Codex Must Do
@@ -52,9 +52,9 @@ The verifier checks:
 - each modeled process has a markdown transcript under
   `.long-horizon/goals/calculator-eval/runs/run-1/artifacts/process-chats/`;
 - the external Codex process has captured prompt, command, stdout, stderr, run
-  metadata, and last-message artifacts under `process-logs/codex-main`;
+  metadata, and last-message artifacts under `processes/codex-main/logs`;
 - prepare-time and verify-time subprocesses have captured command, stdout,
-  stderr, and run metadata under `process-logs/`;
+  stderr, and run metadata under `processes/<process-id>/logs/`;
 - the target repo has a final commit after the seed commit.
 
 ## Human Review Artifacts
@@ -62,21 +62,21 @@ The verifier checks:
 Inspect:
 
 ```text
-./tmp/evals/long-horizon-calculator/artifacts/eval-manifest.json
-./tmp/evals/long-horizon-calculator/artifacts/eval-result.json
-./tmp/evals/long-horizon-calculator/artifacts/process-logs/codex-main/prompt.md
-./tmp/evals/long-horizon-calculator/artifacts/process-logs/codex-main/command.json
-./tmp/evals/long-horizon-calculator/artifacts/process-logs/codex-main/stdout.jsonl
-./tmp/evals/long-horizon-calculator/artifacts/process-logs/codex-main/stderr.txt
-./tmp/evals/long-horizon-calculator/artifacts/process-logs/codex-main/run.json
-./tmp/evals/long-horizon-calculator/artifacts/process-logs/codex-main/last-message.md
-./tmp/evals/long-horizon-calculator/artifacts/process-logs/prepare-git-001-init/
-./tmp/evals/long-horizon-calculator/artifacts/process-logs/verify-unittest/
-./tmp/evals/long-horizon-calculator/artifacts/process-logs/verify-git-rev-list/
-./tmp/evals/long-horizon-calculator/target-repo/calculator.py
-./tmp/evals/long-horizon-calculator/target-repo/.long-horizon/goals/calculator-eval/runs/run-1/artifacts/process-chats/
-./tmp/evals/long-horizon-calculator/target-repo/.long-horizon/goals/calculator-eval/runs/run-1/reports/progress.html
-./tmp/evals/long-horizon-calculator/target-repo/.long-horizon/goals/calculator-eval/runs/run-1/reports/report-data.json
+./tmp/evals/long-horizon-calculator/.long-horizon/goals/calculator-eval/runs/run-1/eval-manifest.json
+./tmp/evals/long-horizon-calculator/.long-horizon/goals/calculator-eval/runs/run-1/eval-result.json
+./tmp/evals/long-horizon-calculator/.long-horizon/goals/calculator-eval/runs/run-1/processes/codex-main/logs/prompt.md
+./tmp/evals/long-horizon-calculator/.long-horizon/goals/calculator-eval/runs/run-1/processes/codex-main/logs/command.json
+./tmp/evals/long-horizon-calculator/.long-horizon/goals/calculator-eval/runs/run-1/processes/codex-main/logs/stdout.jsonl
+./tmp/evals/long-horizon-calculator/.long-horizon/goals/calculator-eval/runs/run-1/processes/codex-main/logs/stderr.txt
+./tmp/evals/long-horizon-calculator/.long-horizon/goals/calculator-eval/runs/run-1/processes/codex-main/logs/run.json
+./tmp/evals/long-horizon-calculator/.long-horizon/goals/calculator-eval/runs/run-1/processes/codex-main/logs/last-message.md
+./tmp/evals/long-horizon-calculator/.long-horizon/goals/calculator-eval/runs/run-1/processes/prepare-git-001-init/logs/
+./tmp/evals/long-horizon-calculator/.long-horizon/goals/calculator-eval/runs/run-1/processes/verify-unittest/logs/
+./tmp/evals/long-horizon-calculator/.long-horizon/goals/calculator-eval/runs/run-1/processes/verify-git-rev-list/logs/
+./tmp/evals/long-horizon-calculator/calculator.py
+./tmp/evals/long-horizon-calculator/.long-horizon/goals/calculator-eval/runs/run-1/artifacts/process-chats/
+./tmp/evals/long-horizon-calculator/.long-horizon/goals/calculator-eval/runs/run-1/reports/progress.html
+./tmp/evals/long-horizon-calculator/.long-horizon/goals/calculator-eval/runs/run-1/reports/report-data.json
 ```
 
 ## Clean

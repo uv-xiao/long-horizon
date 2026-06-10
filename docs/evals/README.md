@@ -6,7 +6,9 @@ repository under repo-local `./tmp/evals`, launches a new Codex session inside
 that target repo with `codex exec --dangerously-bypass-approvals-and-sandbox`,
 and then verifies the resulting long-horizon artifacts from the outside.
 
-The eval target is intentionally not this template repository. The target agent
+The eval target is intentionally not this template repository. The eval
+directory itself is the target repository; do not create a nested `target-repo`
+wrapper. The target agent
 must install and use the template in the target repo, then leave reports,
 ledgers, process state, process chat/transcript artifacts, captured external
 process logs, and commits that a human reviewer can inspect.
@@ -23,12 +25,13 @@ process logs, and commits that a human reviewer can inspect.
 Each eval should provide:
 
 1. a script under `scripts/evals/`;
-2. a fresh target git repo under `./tmp/evals/<name>/target-repo`;
+2. a fresh target git repo at `./tmp/evals/<name>`;
 3. a generated Codex prompt artifact;
 4. an external verifier that checks target repo behavior and long-horizon
    evidence;
 5. a documentation page under `docs/evals/` naming review artifacts.
-6. process-log artifacts under `./tmp/evals/<name>/artifacts/process-logs/`
+6. process-log artifacts under
+   `./tmp/evals/<name>/.long-horizon/goals/<goal>/runs/<run>/processes/<process>/logs/`
    for every external process the eval launcher opens, including prompt,
    command, stdout, stderr, run metadata, and final agent message when the
    process is an agent session;

@@ -11,7 +11,6 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_EVAL_ROOT = REPO_ROOT / "tmp" / "evals" / "long-horizon-calculator"
-TARGET_NAME = "target-repo"
 GOAL_ID = "calculator-eval"
 RUN_ID = "run-1"
 
@@ -66,11 +65,9 @@ def main(argv: list[str] | None = None) -> int:
 def prepare_eval(eval_root: Path, template_repo: Path, reset: bool = False) -> dict[str, Any]:
     if reset:
         clean(eval_root)
-    target = eval_root / TARGET_NAME
-    artifacts = eval_root / "artifacts"
+    target = eval_root
     if target.exists():
         raise SystemExit(f"eval target already exists: {target}; rerun with --reset or clean first")
-    artifacts.mkdir(parents=True, exist_ok=True)
     target.mkdir(parents=True, exist_ok=True)
     git(target, "init", "-b", "main", eval_root=eval_root, process_id="prepare-git-001-init")
     git(target, "config", "user.name", "Long Horizon Eval", eval_root=eval_root, process_id="prepare-git-002-config-name")
@@ -85,10 +82,10 @@ def prepare_eval(eval_root: Path, template_repo: Path, reset: bool = False) -> d
     git(target, "commit", "-m", "eval: seed calculator task", eval_root=eval_root, process_id="prepare-git-005-commit")
 
     prompt = codex_prompt(template_repo)
-    codex_logs = process_log_paths(artifacts, "codex-main", prompt=True, last_message=True)
+    codex_logs = process_log_paths(target, "codex-main", prompt=True, last_message=True)
     prompt_path = Path(codex_logs["prompt"])
     write(prompt_path, prompt)
-    process_logs = collect_process_logs(artifacts)
+    process_logs = collect_process_logs(target)
     process_logs["codex-main"] = codex_logs
     manifest = {
         "eval": "calculator",
@@ -105,7 +102,7 @@ def prepare_eval(eval_root: Path, template_repo: Path, reset: bool = False) -> d
         "verify_command": [sys.executable, str(Path(__file__).resolve()), "--eval-root", str(eval_root), "verify"],
         "review_artifacts": review_artifacts(target),
     }
-    write_json(artifacts / "eval-manifest.json", manifest)
+    write_json(eval_manifest_path(target), manifest)
     return manifest
 
 
@@ -130,8 +127,8 @@ def run_codex_eval(eval_root: Path, manifest: dict[str, Any], model: str | None 
 
 
 def verify_eval(eval_root: Path) -> dict[str, Any]:
-    target = eval_root / TARGET_NAME
-    manifest_path = eval_root / "artifacts" / "eval-manifest.json"
+    target = eval_root
+    manifest_path = eval_manifest_path(target)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
     report_data = target / ".long-horizon" / "goals" / GOAL_ID / "runs" / RUN_ID / "reports" / "report-data.json"
     run_path = target / ".long-horizon" / "goals" / GOAL_ID / "runs" / RUN_ID
@@ -167,7 +164,7 @@ def verify_eval(eval_root: Path) -> dict[str, Any]:
     except ValueError:
         commit_count = 0
     checks.append(("final work committed", commit_count >= 2, commits["stdout_text"] + commits["stderr_text"]))
-    process_logs = {**manifest.get("process_logs", {}), **collect_process_logs(eval_root / "artifacts")}
+    process_logs = {**manifest.get("process_logs", {}), **collect_process_logs(target)}
     for process_id, paths in sorted(process_logs.items()):
         checks.append((f"{process_id} command captured", Path(paths.get("command", "")).exists(), paths.get("command", "")))
         checks.append((f"{process_id} stdout captured", Path(paths.get("stdout", "")).exists(), paths.get("stdout", "")))
@@ -189,7 +186,7 @@ def verify_eval(eval_root: Path) -> dict[str, Any]:
         "review_artifacts": review_artifacts(target),
         "process_logs": process_logs,
     }
-    write_json(eval_root / "artifacts" / "eval-result.json", result)
+    write_json(eval_result_path(target), result)
     return result
 
 
@@ -211,8 +208,20 @@ def codex_command(target: Path, prompt_path: Path, last_message_path: Path) -> l
     ]
 
 
-def process_log_paths(artifacts: Path, process_id: str, prompt: bool = False, last_message: bool = False) -> dict[str, str]:
-    base = artifacts / "process-logs" / process_id
+def eval_run_dir(target: Path) -> Path:
+    return target / ".long-horizon" / "goals" / GOAL_ID / "runs" / RUN_ID
+
+
+def eval_manifest_path(target: Path) -> Path:
+    return eval_run_dir(target) / "eval-manifest.json"
+
+
+def eval_result_path(target: Path) -> Path:
+    return eval_run_dir(target) / "eval-result.json"
+
+
+def process_log_paths(target: Path, process_id: str, prompt: bool = False, last_message: bool = False) -> dict[str, str]:
+    base = eval_run_dir(target) / "processes" / process_id / "logs"
     paths = {
         "prompt": str(base / "prompt.md"),
         "command": str(base / "command.json"),
@@ -228,17 +237,20 @@ def process_log_paths(artifacts: Path, process_id: str, prompt: bool = False, la
     return paths
 
 
-def collect_process_logs(artifacts: Path) -> dict[str, dict[str, str]]:
-    base = artifacts / "process-logs"
+def collect_process_logs(target: Path) -> dict[str, dict[str, str]]:
+    base = eval_run_dir(target) / "processes"
     if not base.exists():
         return {}
     logs: dict[str, dict[str, str]] = {}
     for process_dir in sorted(path for path in base.iterdir() if path.is_dir()):
-        paths = process_log_paths(artifacts, process_dir.name)
-        if (process_dir / "prompt.md").exists():
-            paths["prompt"] = str(process_dir / "prompt.md")
-        if (process_dir / "last-message.md").exists():
-            paths["last_message"] = str(process_dir / "last-message.md")
+        log_dir = process_dir / "logs"
+        if not log_dir.exists():
+            continue
+        paths = process_log_paths(target, process_dir.name)
+        if (log_dir / "prompt.md").exists():
+            paths["prompt"] = str(log_dir / "prompt.md")
+        if (log_dir / "last-message.md").exists():
+            paths["last_message"] = str(log_dir / "last-message.md")
         logs[process_dir.name] = paths
     return logs
 
@@ -436,6 +448,8 @@ def review_artifacts(target: Path) -> dict[str, str]:
     run = target / ".long-horizon" / "goals" / GOAL_ID / "runs" / RUN_ID
     return {
         "target_repo": str(target),
+        "eval_manifest": str(eval_manifest_path(target)),
+        "eval_result": str(eval_result_path(target)),
         "task": str(target / "TASK.md"),
         "calculator": str(target / "calculator.py"),
         "report_html": str(run / "reports" / "progress.html"),
@@ -467,8 +481,7 @@ def run_captured_process(
     stdin_ref: str | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    artifacts = eval_root / "artifacts"
-    paths = process_log_paths(artifacts, process_id)
+    paths = process_log_paths(eval_root, process_id)
     command_record = {"process_id": process_id, "command": cmd, "cwd": str(cwd)}
     if stdin_ref:
         command_record["stdin"] = stdin_ref

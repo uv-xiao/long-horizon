@@ -5,10 +5,10 @@ This file tracks commit/PR-sized changes while the template evolves. It is not a
 ## Current Change
 
 - Added the first external eval example for the calculator task: a repo-local
-  `./tmp/evals` target-repo harness that launches a new yolo Codex session,
-  captures external process logs and modeled process chat artifacts, verifies
-  the resulting long-horizon artifacts, and documents human review paths under
-  `docs/evals/`.
+  `./tmp/evals/<name>` target repo harness that launches a new yolo Codex
+  session, captures external process logs inside the eval target's goal/run
+  process tree, captures modeled process chat artifacts, verifies the resulting
+  long-horizon artifacts, and documents human review paths under `docs/evals/`.
 - Added a v1 feature completion and alignment goal that treats the newly added
   runtime modules as provisional until they are integrated through runtime
   behavior, prompts/skills, durable artifacts, reports, hard system tests, and
